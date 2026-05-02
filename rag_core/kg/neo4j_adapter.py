@@ -172,12 +172,19 @@ class Neo4jAdapter:
                 )
             edges.append(GraphEdge(source=s_id, target=o_id, label=row["rel"]))
 
+        # 정규화 후처리 — alias 통합(어거스틴/Augustine), 노이즈 제거, dedup
+        from rag_core.kg.entity_normalizer import normalize_subgraph
+
+        raw = SubgraphData(nodes=list(nodes_by_id.values()), edges=edges)
+        normalized = normalize_subgraph(raw)
+
         # 시각화 부담 줄이려 노드 30개, 엣지 50개로 캡
-        nodes = list(nodes_by_id.values())[:30]
-        # 캡으로 제외된 노드를 참조하는 엣지 제거
+        nodes = normalized.nodes[:30]
         valid_ids = {n.id for n in nodes}
-        edges = [e for e in edges if e.source in valid_ids and e.target in valid_ids][:50]
-        return SubgraphData(nodes=nodes, edges=edges)
+        edges_capped = [
+            e for e in normalized.edges if e.source in valid_ids and e.target in valid_ids
+        ][:50]
+        return SubgraphData(nodes=nodes, edges=edges_capped)
 
     def clear(self) -> None:
         """전체 노드/엣지 삭제 (재인덱싱 시)."""
