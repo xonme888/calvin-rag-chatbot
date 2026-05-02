@@ -51,7 +51,17 @@ kg = [
     "streamlit-agraph>=0.0.45",
 ]
 
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+# Phase 2: FastAPI 백엔드 (Next.js 프론트와 함께 사용)
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.0",       # EventSourceResponse (keep-alive, 재연결)
+    "slowapi>=0.1.9",           # IP 단위 rate limiting
+    "pyjwt[crypto]>=2.8",       # Cloudflare Access JWT 검증
+    "httpx>=0.27",              # CF JWKS fetch
+]
 
 # 한 번에 다 설치
 all = [
@@ -60,7 +70,14 @@ all = [
     "langchain-experimental>=0.3.0",
     "neo4j>=5.20",
     "streamlit-agraph>=0.0.45",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.0",
+    "slowapi>=0.1.9",
+    "pyjwt[crypto]>=2.8",
+    "httpx>=0.27",
     "pytest>=8.0",
+    "pytest-asyncio>=0.23",
     "ruff>=0.6",
 ]
 
@@ -68,11 +85,11 @@ all = [
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-# 패키지로 빌드 대상: rag_core, infra (app은 진입 스크립트라 제외)
+# 패키지로 빌드 대상: rag_core, infra (app/api/web 은 진입 스크립트/별도 워크스페이스라 제외)
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["rag_core*", "infra*"]
-exclude = ["app*", "tests*", "data*", "indexes*", ".venv*"]
+exclude = ["app*", "api*", "web*", "tests*", "data*", "indexes*", ".venv*"]
 
 [tool.ruff]
 line-length = 100

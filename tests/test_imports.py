@@ -51,6 +51,12 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "infra.document_loader",
     "infra.index_cache",
     "infra.usage_tracker",
+    # api (Phase 2 Step 1)
+    "api",
+    "api.main",
+    "api.routes",
+    "api.routes.health",
+    "api.middleware",
 )
 
 
