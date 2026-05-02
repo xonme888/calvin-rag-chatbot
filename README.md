@@ -53,6 +53,27 @@ streamlit run app/calvin_chatbot.py
 
 면접/포트폴리오 데모용 큐레이션 질문 + 모드별 강점 매핑은 [`docs/demo-questions.md`](docs/demo-questions.md) 참고. 5분 데모 흐름 포함.
 
+## 페이지 구성 (Streamlit 멀티페이지)
+
+| 페이지 | 경로 | 용도 |
+|---|---|---|
+| 메인 챗봇 | `app/calvin_chatbot.py` | 모드 토글 (Hybrid/Agentic/KG). 멀티턴, 출처 expander, 누적 통계 |
+| **3 모드 비교** | `app/pages/01_compare_modes.py` | 같은 질문을 3 모드에 병렬 투입. 답변/메타/그래프 나란히 |
+
+`session_state.usage_stats` 를 두 페이지가 공유 — 누적 비용/토큰이 페이지 이동에도 보존.
+
+## 관측성 — 사용 통계 패널
+
+사이드바에서 **모드별 LLM 호출 / 입출력 토큰 / ₩비용 / 누적 합계** 실시간 확인. LangChain `BaseCallbackHandler` 로 자동 추적 (`infra/usage_tracker.py`). 통계 리셋 버튼 포함.
+
+```
+누적 사용 통계 (8회 호출)
+  Hybrid — 4회 · in 12,400 / out 1,200 토큰 · ₩3.0
+  Agentic — 2회 · in 5,600 / out 800 토큰 · ₩1.6
+  Knowledge Graph — 2회 · in 7,800 / out 600 토큰 · ₩1.7
+  합계: ₩6.3 ($0.0042 · 28,400 토큰)
+```
+
 ## 구조
 
 ```
