@@ -54,13 +54,22 @@ export async function chatSync(req: ChatRequest): Promise<ChatSyncResponse> {
 
 // SSE 스트리밍 — 자체 ReadableStream 파싱.
 // 백엔드 포맷 (sse-starlette EventSourceResponse):
+//   event: message
 //   data: {"type":"text-delta","delta":"..."}
-//   ... (event: done) data: [DONE]
+//
+//   event: done
+//   data: [DONE]
+const DEBUG_SSE = process.env.NODE_ENV !== "production";
+
 export async function* chatStream(req: ChatRequest): AsyncGenerator<string> {
   const r = await fetch(`${API_BASE}/chat/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
     body: JSON.stringify(req),
+    cache: "no-store",
   });
   if (!r.ok || !r.body) {
     const text = r.body ? await r.text() : "";
@@ -76,30 +85,56 @@ export async function* chatStream(req: ChatRequest): AsyncGenerator<string> {
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE 메시지 = "\n\n" 으로 구분
+    // CRLF → LF 정규화 (서버/프록시 환경에 따라 \r\n 사용 가능)
+    buffer = buffer.replace(/\r\n/g, "\n");
+
+    // SSE 메시지 구분 = 빈 줄 ("\n\n")
     let sep: number;
     while ((sep = buffer.indexOf("\n\n")) !== -1) {
       const raw = buffer.slice(0, sep);
       buffer = buffer.slice(sep + 2);
 
-      // "data: ..." 라인만 파싱 (event:, id: 등은 무시)
-      const dataLines = raw
-        .split("\n")
-        .filter((l) => l.startsWith("data: "))
-        .map((l) => l.slice(6));
+      // SSE: 한 메시지 안의 여러 라인 (event:, data:, id:, retry:)
+      let eventType = "message";
+      const dataLines: string[] = [];
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("data: ")) {
+          dataLines.push(line.slice(6));
+        } else if (line.startsWith("data:")) {
+          // 공백 없는 형태도 허용
+          dataLines.push(line.slice(5));
+        } else if (line.startsWith("event: ")) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith(":")) {
+          // SSE comment (keep-alive ping) — 무시
+          continue;
+        }
+      }
       if (dataLines.length === 0) continue;
 
       const payload = dataLines.join("\n");
-      if (payload === "[DONE]") return;
+
+      if (DEBUG_SSE) {
+        // eslint-disable-next-line no-console
+        console.debug("[SSE]", eventType, payload.slice(0, 80));
+      }
+
+      // 종료 시그널
+      if (eventType === "done" || payload === "[DONE]") return;
 
       try {
         const obj = JSON.parse(payload);
         if (obj.type === "text-delta" && typeof obj.delta === "string") {
           yield obj.delta;
+        } else if (DEBUG_SSE) {
+          // eslint-disable-next-line no-console
+          console.warn("[SSE] unknown payload type:", obj);
         }
       } catch {
-        // JSON 아닌 chunk — 그대로 yield
-        yield payload;
+        // JSON 파싱 실패 — payload 가 [DONE] 등 plain text 일 수 있음
+        if (payload && payload !== "[DONE]") {
+          yield payload;
+        }
       }
     }
   }

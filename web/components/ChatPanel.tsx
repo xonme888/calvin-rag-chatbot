@@ -55,8 +55,14 @@ export function ChatPanel() {
       if (mode === "hybrid") {
         // Hybrid 는 SSE 스트리밍 (UX 임팩트)
         let acc = "";
+        let chunkCount = 0;
         for await (const chunk of chatStream({ question, mode })) {
           acc += chunk;
+          chunkCount += 1;
+          if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug(`[chat] chunk#${chunkCount} len=${acc.length}`);
+          }
           setMessages((prev) => {
             const next = [...prev];
             next[next.length - 1] = {
@@ -67,11 +73,15 @@ export function ChatPanel() {
             return next;
           });
         }
+        if (acc === "" && process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.warn("[chat] stream 종료됐으나 누적 chunk가 비어 있음");
+        }
         setMessages((prev) => {
           const next = [...prev];
           next[next.length - 1] = {
             role: "assistant",
-            content: acc,
+            content: acc || "(빈 응답 — 백엔드 SSE 파싱 점검 필요)",
             streaming: false,
           };
           return next;
