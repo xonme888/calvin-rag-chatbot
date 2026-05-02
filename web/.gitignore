@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+build/
+
+# 환경변수
+.env*.local
+
+# TypeScript 빌드 캐시
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+
+# 로그
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
