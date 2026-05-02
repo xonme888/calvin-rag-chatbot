@@ -22,7 +22,7 @@ from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field as PydanticField
 
 from rag_core.hybrid import HybridRAG, _format_doc_with_meta
-from rag_core.kg.extractor import (
+from rag_core.kg.section_filter import (
     DEFAULT_CALVIN_SECTIONS,
     CalvinSection,
     estimate_cost,
