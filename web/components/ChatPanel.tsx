@@ -6,10 +6,14 @@ import { chatStream, chatSync, fetchModes } from "@/lib/api";
 import type {
   CitationLabel,
   ChatStreamMeta,
-  ChatSyncResponse,
   Mode,
   ModeInfo,
 } from "@/lib/api";
+import {
+  deriveTitle,
+  type ChatSession,
+  type SessionMessage,
+} from "@/lib/sessionStore";
 import { AboutModal } from "./AboutModal";
 import { FollowupChips } from "./FollowupChips";
 import { MarkdownAnswer } from "./MarkdownAnswer";
@@ -22,16 +26,15 @@ import { SubgraphView } from "./SubgraphView";
 import type { SubgraphData } from "./SubgraphView";
 import { SuggestedPrompts } from "./SuggestedPrompts";
 
-interface UIMessage {
-  role: "user" | "assistant";
-  content: string;
-  meta?: ChatSyncResponse;
-  streamMeta?: ChatStreamMeta; // Hybrid 모드 stream 종료 후 도착
-  streaming?: boolean;
+interface ChatPanelProps {
+  session: ChatSession;
+  onUpdate: (
+    patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
+  ) => void;
 }
 
 // sync 응답 또는 stream meta 에서 출처 정보 통합 추출
-function extractSources(msg: UIMessage): {
+function extractSources(msg: SessionMessage): {
   sources: string[];
   labels: Array<CitationLabel | null>;
 } {
@@ -51,27 +54,30 @@ function extractSources(msg: UIMessage): {
 }
 
 // sync metadata 또는 stream meta 에서 후속 질문 추출
-function extractFollowups(msg: UIMessage): string[] {
-  const candidate = msg.streamMeta?.suggested_followups
-    ?? (msg.meta?.metadata.suggested_followups as string[] | undefined);
-  return Array.isArray(candidate) ? candidate.filter((q) => typeof q === "string") : [];
+function extractFollowups(msg: SessionMessage): string[] {
+  const candidate =
+    msg.streamMeta?.suggested_followups ??
+    (msg.meta?.metadata.suggested_followups as string[] | undefined);
+  return Array.isArray(candidate)
+    ? candidate.filter((q) => typeof q === "string")
+    : [];
 }
 
-function isAssistant(msg: UIMessage): boolean {
+function isAssistant(msg: SessionMessage): boolean {
   return msg.role === "assistant";
 }
 
 // KG 모드 응답에서 부분 그래프 추출 (sync 응답에만 존재)
-function extractSubgraph(msg: UIMessage): SubgraphData | null {
+function extractSubgraph(msg: SessionMessage): SubgraphData | null {
   const sg = msg.meta?.metadata.subgraph as SubgraphData | undefined;
   if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
   return sg;
 }
 
-export function ChatPanel() {
+export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
   const [modes, setModes] = useState<ModeInfo[]>([]);
-  const [mode, setMode] = useState<Mode>("hybrid");
-  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [messages, setMessages] = useState<SessionMessage[]>(session.messages);
+  const [mode, setMode] = useState<Mode>(session.mode);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,12 +88,21 @@ export function ChatPanel() {
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 모드 목록 로드
+  // 모드 목록 로드 (1회)
   useEffect(() => {
     fetchModes()
       .then(setModes)
       .catch((e) => setError(`/modes 로드 실패: ${e.message}`));
   }, []);
+
+  // 세션 전환 시 local 상태 동기화
+  useEffect(() => {
+    setMessages(session.messages);
+    setMode(session.mode);
+    setInput("");
+    setError(null);
+    setDrawer(null);
+  }, [session.id]);
 
   // 새 메시지 도착 시 스크롤
   useEffect(() => {
@@ -96,6 +111,20 @@ export function ChatPanel() {
       behavior: "smooth",
     });
   }, [messages]);
+
+  function commit(nextMessages: SessionMessage[], nextMode?: Mode) {
+    onUpdate({
+      messages: nextMessages,
+      title: deriveTitle(nextMessages),
+      mode: nextMode ?? mode,
+    });
+  }
+
+  function handleModeChange(m: Mode) {
+    if (busy) return;
+    setMode(m);
+    onUpdate({ mode: m });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,94 +139,78 @@ export function ChatPanel() {
     setError(null);
     setBusy(true);
 
-    setMessages((prev) => [
-      ...prev,
+    let next: SessionMessage[] = [
+      ...messages,
       { role: "user", content: question },
       { role: "assistant", content: "", streaming: true },
-    ]);
+    ];
+    setMessages(next);
 
     try {
       if (mode === "hybrid") {
-        // Hybrid 는 SSE 스트리밍 (UX 임팩트). delta + 종료 직전 meta 1회 도착.
-        let acc = "";
-        let chunkCount = 0;
+        let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
         for await (const chunk of chatStream({ question, mode })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
-            if (process.env.NODE_ENV !== "production") {
-              // eslint-disable-next-line no-console
-              console.debug("[chat] meta 도착", receivedMeta);
-            }
             continue;
           }
-          // delta
-          acc += chunk.text;
-          chunkCount += 1;
-          if (process.env.NODE_ENV !== "production") {
-            // eslint-disable-next-line no-console
-            console.debug(`[chat] chunk#${chunkCount} len=${acc.length}`);
-          }
-          setMessages((prev) => {
-            const next = [...prev];
-            next[next.length - 1] = {
-              role: "assistant",
-              content: acc,
-              streaming: true,
-            };
-            return next;
-          });
+          text += chunk.text;
+          next = [
+            ...next.slice(0, -1),
+            { role: "assistant", content: text, streaming: true },
+          ];
+          setMessages(next);
         }
-        if (acc === "" && process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.warn("[chat] stream 종료됐으나 누적 chunk가 비어 있음");
-        }
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = {
+        next = [
+          ...next.slice(0, -1),
+          {
             role: "assistant",
-            content: acc || "(빈 응답 — 백엔드 SSE 파싱 점검 필요)",
+            content: text || "(빈 응답 — 백엔드 SSE 파싱 점검 필요)",
             streamMeta: receivedMeta,
             streaming: false,
-          };
-          return next;
-        });
+          },
+        ];
+        setMessages(next);
       } else {
-        // Agentic / KG 는 sync (응답 완성 후 가드 풀 패스 + 메타 전체)
         const resp = await chatSync({ question, mode });
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = {
+        next = [
+          ...next.slice(0, -1),
+          {
             role: "assistant",
             content: resp.answer,
             meta: resp,
             streaming: false,
-          };
-          return next;
-        });
+          },
+        ];
+        setMessages(next);
       }
+      commit(next);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
-      setMessages((prev) => {
-        const next = [...prev];
-        next[next.length - 1] = {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setError(errMsg);
+      next = [
+        ...next.slice(0, -1),
+        {
           role: "assistant",
-          content: `오류: ${msg}`,
+          content: `오류: ${errMsg}`,
           streaming: false,
-        };
-        return next;
-      });
+        },
+      ];
+      setMessages(next);
+      commit(next);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto">
+    <div className="flex flex-col h-full flex-1 max-w-3xl w-full mx-auto">
       {/* 헤더 — 미니멀: 타이틀 + 정보 아이콘만 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
-        <h1 className="text-lg font-semibold">칼빈 신학 챗봇</h1>
+        <h1 className="text-lg font-semibold truncate">
+          {session.title || "칼빈 신학 챗봇"}
+        </h1>
         <button
           type="button"
           onClick={() => setAboutOpen(true)}
@@ -229,7 +242,6 @@ export function ChatPanel() {
             m.role === "assistant" && i === messages.length - 1 && !m.streaming;
           const isAssistantMsg = m.role === "assistant";
 
-          // drawer items 빌드 — sources 전부를 SourceItem 배열로
           const buildItems = (): SourceItem[] =>
             sources.map((content, idx) => ({
               index: idx + 1,
@@ -237,7 +249,6 @@ export function ChatPanel() {
               content,
             }));
 
-          // 인라인 [p.N] 클릭 → 해당 page 의 첫 카드를 highlight
           const handleCitationClick = (page: number) => {
             let hi: number | undefined;
             for (let k = 0; k < labels.length; k++) {
@@ -249,10 +260,10 @@ export function ChatPanel() {
             setDrawer({ items: buildItems(), highlightedIndex: hi });
           };
 
-          // carousel 카드 클릭 → 해당 카드를 highlight
           const handleCardClick = (index1Based: number) => {
             setDrawer({ items: buildItems(), highlightedIndex: index1Based });
           };
+
           return (
             <div
               key={i}
@@ -263,7 +274,6 @@ export function ChatPanel() {
                   : "bg-white border border-slate-200 mr-12",
               ].join(" ")}
             >
-              {/* 답변 헤더 meta 행 (응답시간 · 모드 · 토큰 · 신뢰도) */}
               {isAssistantMsg && (m.meta || m.streamMeta) && (
                 <MessageHeader
                   mode={mode}
@@ -271,7 +281,6 @@ export function ChatPanel() {
                   streamMeta={m.streamMeta}
                 />
               )}
-              {/* 답변 위 출처 carousel (Perplexity 스타일) */}
               {isAssistantMsg && sources.length > 0 && (
                 <SourceCarousel
                   sources={sources}
@@ -279,12 +288,11 @@ export function ChatPanel() {
                   onCardClick={handleCardClick}
                 />
               )}
-              {/* KG 모드: 부분 그래프 시각화 (force-directed) */}
-              {isAssistantMsg && (() => {
-                const sg = extractSubgraph(m);
-                return sg ? <SubgraphView subgraph={sg} /> : null;
-              })()}
-              {/* 답변 본문 — assistant 면 markdown + 인라인 [p.N] 치환 */}
+              {isAssistantMsg &&
+                (() => {
+                  const sg = extractSubgraph(m);
+                  return sg ? <SubgraphView subgraph={sg} /> : null;
+                })()}
               {isAssistantMsg ? (
                 <MarkdownAnswer
                   content={m.content}
@@ -302,7 +310,6 @@ export function ChatPanel() {
                   ▍
                 </span>
               )}
-              {/* 후속 질문 chip — 마지막 답변에만 노출 (스크롤 거슬림 방지) */}
               {isLastAssistant && followups.length > 0 && (
                 <FollowupChips
                   questions={followups}
@@ -315,7 +322,6 @@ export function ChatPanel() {
         })}
       </div>
 
-      {/* 입력 영역 — 모드 토글이 입력창 위 */}
       {error && (
         <div className="px-4 py-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
           {error}
@@ -323,7 +329,7 @@ export function ChatPanel() {
       )}
       <div className="border-t border-slate-200 bg-white px-4 pt-3 pb-3">
         <div className="mb-2">
-          <ModeSelector modes={modes} current={mode} onChange={setMode} />
+          <ModeSelector modes={modes} current={mode} onChange={handleModeChange} />
         </div>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
