@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { chatStream, chatSync, fetchModes } from "@/lib/api";
 import type {
+  CitationLabel,
   ChatStreamMeta,
   ChatSyncResponse,
   Mode,
   ModeInfo,
 } from "@/lib/api";
 import { ModeSelector } from "./ModeSelector";
-import { SourceCard } from "./SourceCard";
+import { SourceCarousel } from "./SourceCarousel";
 
 interface UIMessage {
   role: "user" | "assistant";
@@ -17,6 +18,26 @@ interface UIMessage {
   meta?: ChatSyncResponse;
   streamMeta?: ChatStreamMeta; // Hybrid 모드 stream 종료 후 도착
   streaming?: boolean;
+}
+
+// sync 응답 또는 stream meta 에서 출처 정보 통합 추출
+function extractSources(msg: UIMessage): {
+  sources: string[];
+  labels: Array<CitationLabel | null>;
+} {
+  if (msg.streamMeta) {
+    return {
+      sources: msg.streamMeta.source_documents,
+      labels: msg.streamMeta.source_pages_label,
+    };
+  }
+  if (msg.meta) {
+    const labels =
+      (msg.meta.metadata.source_pages_label as Array<CitationLabel | null>) ??
+      [];
+    return { sources: msg.meta.source_documents, labels };
+  }
+  return { sources: [], labels: [] };
 }
 
 export function ChatPanel() {
@@ -152,30 +173,41 @@ export function ChatPanel() {
             <p className="text-sm">예: 칼빈은 예정론을 어떻게 정의하는가?</p>
           </div>
         )}
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={[
-              "rounded-lg px-4 py-3 text-sm",
-              m.role === "user"
-                ? "bg-primary text-white ml-12"
-                : "bg-white border border-slate-200 mr-12",
-            ].join(" ")}
-          >
-            <div className="whitespace-pre-wrap leading-relaxed">
-              {m.content}
-              {m.streaming && <span className="ml-1 animate-pulse">▍</span>}
-            </div>
-            {m.meta && (
-              <>
+        {messages.map((m, i) => {
+          const { sources, labels } = extractSources(m);
+          const isAssistant = m.role === "assistant";
+          return (
+            <div
+              key={i}
+              className={[
+                "rounded-lg px-4 py-3 text-sm",
+                m.role === "user"
+                  ? "bg-primary text-white ml-12"
+                  : "bg-white border border-slate-200 mr-12",
+              ].join(" ")}
+            >
+              {/* 답변 위 출처 carousel (Perplexity 스타일) */}
+              {isAssistant && sources.length > 0 && (
+                <SourceCarousel sources={sources} labels={labels} />
+              )}
+              <div className="whitespace-pre-wrap leading-relaxed">
+                {m.content}
+                {m.streaming && <span className="ml-1 animate-pulse">▍</span>}
+              </div>
+              {(m.meta || m.streamMeta) && (
                 <div className="mt-2 text-xs text-slate-400">
-                  응답 시간 {m.meta.elapsed_seconds.toFixed(2)}초
+                  응답 시간{" "}
+                  {(
+                    m.meta?.elapsed_seconds ??
+                    m.streamMeta?.elapsed_seconds ??
+                    0
+                  ).toFixed(2)}
+                  초
                 </div>
-                <SourceCard sources={m.meta.source_documents} metadata={m.meta.metadata} />
-              </>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* 입력 */}
