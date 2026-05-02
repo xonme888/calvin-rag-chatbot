@@ -16,14 +16,12 @@ import time
 from functools import lru_cache
 from typing import Annotated, Any, TypedDict
 
-from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
@@ -32,7 +30,7 @@ from pydantic import Field as PydanticField
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from rag_core.tokenizer import BM25Retriever
+from rag_core.retriever import HybridRetriever, RetrieverPort
 
 # 기본 시스템 프롬프트 — 도메인 교체 시 ``HybridRAGConfig(system_prompt=...)``로 외부 주입
 DEFAULT_SYSTEM_PROMPT = (
@@ -155,6 +153,7 @@ class HybridRAG:
         config: HybridRAGConfig | None = None,
         llm: BaseChatModel | None = None,
         embeddings: Embeddings | None = None,
+        retriever: RetrieverPort | None = None,
     ) -> None:
         """Hybrid RAG 인스턴스를 생성한다.
 
@@ -162,6 +161,9 @@ class HybridRAG:
             config: 설정. None이면 .env 기반 기본 설정 사용.
             llm: 외부 주입 LLM. None이면 ChatOpenAI 생성.
             embeddings: 외부 주입 임베딩. None이면 OpenAIEmbeddings 생성.
+                ``retriever`` 가 None일 때만 사용 (retriever 인스턴스 생성용).
+            retriever: 검색 인프라. None이면 HybridRetriever 자동 생성.
+                Hexagonal: RAG 본체는 RetrieverPort에만 의존.
         """
         self.config: HybridRAGConfig = config or get_config()
 
@@ -176,10 +178,13 @@ class HybridRAG:
             api_key=self.config.open_api_key,
         )
 
-        self.text_splitter = RecursiveCharacterTextSplitter(
+        # Retriever 컴포지션 — 검색 인프라는 별도 객체에 위임 (캡슐화)
+        self.retriever: RetrieverPort = retriever or HybridRetriever(
+            embeddings=self.embeddings,
             chunk_size=self.config.chunk_size,
             chunk_overlap=self.config.chunk_overlap,
-            separators=["\n---\n", "\n\n", "\n", ".", " "],
+            dense_weight=self.config.dense_weight,
+            rrf_k=self.config.rrf_k,
         )
 
         # MessagesPlaceholder("chat_history", optional=True): chat_history가 비어 있어도
@@ -192,10 +197,6 @@ class HybridRAG:
             ]
         )
 
-        self.vector_store: FAISS | None = None
-        self.bm25_retriever: BM25Retriever | None = None
-        self.chunks: list[Document] = []
-
         # Reranker (lazy)
         self._reranker: Any = None
 
@@ -205,62 +206,19 @@ class HybridRAG:
         self._graph: CompiledStateGraph = self._build_graph()
 
     def index_documents(self, documents: list[Document]) -> int:
-        """문서를 청크로 나눠 BM25와 FAISS 양쪽에 인덱싱한다."""
-        chunks = self.text_splitter.split_documents(documents)
-        self.chunks = chunks
-
-        self.bm25_retriever = BM25Retriever(chunks)
-        self.vector_store = FAISS.from_documents(chunks, self.embeddings)
-
-        return len(chunks)
-
-    def _reciprocal_rank_fusion(
-        self,
-        bm25_results: list[tuple[Document, float]],
-        dense_results: list[tuple[Document, float]],
-    ) -> list[tuple[Document, float]]:
-        """두 검색 결과를 RRF로 결합한다.
-
-        score(d) = Σ weight_i / (k + rank_i(d))
-
-        점수가 아닌 '순위'만 사용하므로 스케일 정규화가 필요 없다.
-        """
-        k = self.config.rrf_k
-        bm25_weight = 1.0 - self.config.dense_weight
-        dense_weight = self.config.dense_weight
-
-        rrf_scores: dict[int, float] = {}
-        doc_map: dict[int, Document] = {}
-
-        for rank, (doc, _score) in enumerate(bm25_results, start=1):
-            key = hash(doc.page_content)
-            rrf_scores[key] = rrf_scores.get(key, 0.0) + bm25_weight / (k + rank)
-            doc_map[key] = doc
-
-        for rank, (doc, _score) in enumerate(dense_results, start=1):
-            key = hash(doc.page_content)
-            rrf_scores[key] = rrf_scores.get(key, 0.0) + dense_weight / (k + rank)
-            doc_map[key] = doc
-
-        sorted_keys = sorted(rrf_scores, key=lambda k_: rrf_scores[k_], reverse=True)
-        return [(doc_map[k_], rrf_scores[k_]) for k_ in sorted_keys]
+        """문서 인덱싱을 retriever에 위임."""
+        return self.retriever.index_documents(documents)
 
     # ================================================================
     # LangGraph 노드
     # ================================================================
     def _retrieve_node(self, state: HybridRAGState) -> dict[str, Any]:
-        """검색 노드: BM25 + Dense 검색 후 RRF로 결합."""
-        if self.vector_store is None or self.bm25_retriever is None:
-            raise RuntimeError("먼저 index_documents()를 호출하세요.")
-
+        """검색 노드: retriever에 위임 (BM25 + Dense + RRF 결합)."""
         question = state["question"]
-
-        bm25_results = self.bm25_retriever.search(question, k=self.config.top_k)
-        dense_results = self.vector_store.similarity_search_with_score(
+        # retriever_split: bm25/dense/fused 모두 노출 (메타데이터에 활용)
+        bm25_results, dense_results, fused = self.retriever.retrieve_split(  # type: ignore[union-attr]
             question, k=self.config.top_k
         )
-
-        fused = self._reciprocal_rank_fusion(bm25_results, dense_results)
         top_docs = [doc for doc, _ in fused[: self.config.top_k]]
 
         return {
@@ -524,18 +482,13 @@ class HybridRAG:
 
         Stream 종료 후 메타데이터는 ``self._last_metadata``에 저장된다.
         """
-        if self.vector_store is None or self.bm25_retriever is None:
-            raise RuntimeError("먼저 index_documents()를 호출하세요.")
-
         self._last_metadata = None
         start = time.time()
 
-        # 1. 검색 (동기)
-        bm25_results = self.bm25_retriever.search(question, k=self.config.top_k)
-        dense_results = self.vector_store.similarity_search_with_score(
+        # 1. 검색 (retriever에 위임)
+        bm25_results, dense_results, fused = self.retriever.retrieve_split(  # type: ignore[union-attr]
             question, k=self.config.top_k
         )
-        fused = self._reciprocal_rank_fusion(bm25_results, dense_results)
         top_docs = [doc for doc, _ in fused[: self.config.top_k]]
 
         # 2. Reranker (활성화 시)

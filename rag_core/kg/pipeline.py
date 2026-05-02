@@ -132,7 +132,7 @@ class KnowledgeGraphRAG:
         Returns:
             KG에 인덱싱된 청크 수.
         """
-        chunks = self.hybrid.text_splitter.split_documents(documents)
+        chunks = self.hybrid.retriever.text_splitter.split_documents(documents)
         filtered = filter_chunks_by_sections(chunks, self.sections)
         if not filtered:
             return 0
@@ -140,7 +140,7 @@ class KnowledgeGraphRAG:
 
     def estimate_indexing_cost(self, documents: list[Document]) -> dict[str, float]:
         """본 인덱싱 전에 비용/시간 추정 (LLM 호출 없음, 청크 수 기반)."""
-        chunks = self.hybrid.text_splitter.split_documents(documents)
+        chunks = self.hybrid.retriever.text_splitter.split_documents(documents)
         filtered = filter_chunks_by_sections(chunks, self.sections)
         return estimate_cost(filtered)
 
@@ -172,9 +172,6 @@ class KnowledgeGraphRAG:
                 },
             }
         """
-        if self.hybrid.vector_store is None or self.hybrid.bm25_retriever is None:
-            raise RuntimeError("Hybrid RAG가 인덱싱되어 있지 않습니다.")
-
         start = time.time()
 
         invoke_config: dict[str, Any] = {}
@@ -193,13 +190,11 @@ class KnowledgeGraphRAG:
         )
         graph_text = _format_subgraph_for_llm(subgraph)
 
-        # 3) 벡터 검색 (Hybrid의 RRF 재사용)
-        bm25_results = self.hybrid.bm25_retriever.search(question, k=self.hybrid.config.top_k)
-        dense_results = self.hybrid.vector_store.similarity_search_with_score(
-            question, k=self.hybrid.config.top_k
-        )
-        fused = self.hybrid._reciprocal_rank_fusion(bm25_results, dense_results)
-        top_docs = [doc for doc, _ in fused[: self.hybrid.config.top_k]]
+        # 3) 벡터 검색 — RetrieverPort에 위임 (캡슐화 위반 해소)
+        try:
+            top_docs = self.hybrid.retriever.retrieve(question, k=self.hybrid.config.top_k)
+        except RuntimeError as e:
+            raise RuntimeError("Hybrid RAG가 인덱싱되어 있지 않습니다.") from e
         chunk_text = "\n\n---\n\n".join(_format_doc_with_meta(d) for d in top_docs)
 
         # 4) 결합 답변

@@ -9,7 +9,6 @@ from __future__ import annotations
 from infra.document_loader import load_calvin
 from infra.index_cache import build_or_load_faiss, make_cache_key
 from rag_core.hybrid import HybridRAG, HybridRAGConfig
-from rag_core.tokenizer import BM25Retriever
 
 # 칼빈 강요 전용 시스템 프롬프트
 CALVIN_PROMPT = """당신은 칼빈 신학 전문 학습 도우미입니다.
@@ -54,15 +53,14 @@ def build_calvin_rag(
     rag = HybridRAG(config=config)
 
     docs = load_calvin()
-    chunks = rag.text_splitter.split_documents(docs)
-    rag.chunks = chunks
+    chunks = rag.retriever.text_splitter.split_documents(docs)
 
     cache_key = make_cache_key(
         "calvin",
         f"chunk{config.chunk_size}",
         f"overlap{config.chunk_overlap}",
     )
-    rag.vector_store = build_or_load_faiss(cache_key, chunks, rag.embeddings)
-    rag.bm25_retriever = BM25Retriever(chunks)
+    vector_store = build_or_load_faiss(cache_key, chunks, rag.embeddings)
+    rag.retriever.load_prebuilt_index(chunks=chunks, vector_store=vector_store)
 
     return rag

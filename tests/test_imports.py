@@ -25,6 +25,7 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "rag_core.calvin_builder",
     "rag_core.tokenizer",
     "rag_core.reranker",
+    "rag_core.retriever",
     "rag_core.mode_dispatcher",
     # rag_core.kg 서브패키지
     "rag_core.kg",

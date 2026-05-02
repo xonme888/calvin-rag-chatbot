@@ -173,10 +173,10 @@ class AgenticRAG:
     def _make_search_tool(self) -> BaseTool:
         """search_documents 도구를 만든다.
 
-        HybridRAG의 검색 인프라(BM25 + Dense + RRF)를 도구 형태로 노출.
-        클로저로 self.hybrid를 캡처해 도구 호출 시 같은 인덱스를 사용.
+        HybridRAG의 RetrieverPort(검색 인프라)를 도구 형태로 노출.
+        클로저로 retriever를 캡처 — 도구 호출 시 같은 인덱스를 공유.
         """
-        rag = self.hybrid
+        retriever = self.hybrid.retriever
 
         @tool
         def search_documents(query: str, k: int = 5) -> str:
@@ -190,13 +190,10 @@ class AgenticRAG:
                 검색된 청크들의 텍스트와 페이지 번호. 형식:
                 "[page N] 청크 내용\\n\\n---\\n\\n[page M] ..."
             """
-            if rag.vector_store is None or rag.bm25_retriever is None:
+            try:
+                top_docs = retriever.retrieve(query, k=k)
+            except RuntimeError:
                 return "검색기가 초기화되지 않았습니다. 먼저 인덱싱이 필요합니다."
-
-            bm25_results = rag.bm25_retriever.search(query, k=k)
-            dense_results = rag.vector_store.similarity_search_with_score(query, k=k)
-            fused = rag._reciprocal_rank_fusion(bm25_results, dense_results)
-            top_docs = [doc for doc, _ in fused[:k]]
 
             if not top_docs:
                 return "관련된 본문을 찾을 수 없습니다."

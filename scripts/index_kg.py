@@ -78,7 +78,7 @@ def main() -> None:
     print("\n칼빈 강요 PDF 로드 + 단원 필터링...")
     docs = load_calvin()
     rag = build_calvin_rag()  # text_splitter 재사용 목적
-    chunks = rag.text_splitter.split_documents(docs)
+    chunks = rag.retriever.text_splitter.split_documents(docs)
     filtered = filter_chunks_by_sections(chunks, DEFAULT_CALVIN_SECTIONS)
     print(f"  전체 청크: {len(chunks)}, 5단원 필터링 후: {len(filtered)}")
 
