@@ -34,9 +34,32 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage  # noqa
 
 from infra.usage_tracker import SessionStats, UsageTracker  # noqa: E402
 from rag_core.calvin_builder import build_calvin_rag  # noqa: E402
+from rag_core.guardrail import (  # noqa: E402
+    GuardrailDirection,
+    get_input_guardrail,
+    get_output_guardrail,
+)
 
 # 모델명 (사이드바 통계의 단가 룩업용 — HybridRAGConfig 기본값과 일치)
 _DEFAULT_MODEL = "gpt-4o-mini"
+
+
+def _apply_output_guard(answer: str) -> tuple[str, str | None]:
+    """출력 가드 적용 — sanitize 시 마스킹된 답변 반환, block 시 fallback 메시지.
+
+    Returns:
+        (final_answer, warning) — warning 은 사용자에게 표시할 안내(있을 때만)
+    """
+    output_guard = get_output_guardrail()
+    decision = output_guard.check(answer, GuardrailDirection.OUTPUT)
+    if not decision.allow:
+        return (
+            "답변이 정책에 의해 필터링되었습니다. 질문을 다시 작성해 주세요.",
+            decision.reason,
+        )
+    if decision.sanitized:
+        return decision.sanitized, decision.reason
+    return answer, None
 
 
 def _messages_to_history(messages: list[dict]) -> list[BaseMessage]:
@@ -399,6 +422,16 @@ for msg in st.session_state.messages:
 
 # 사용자 입력
 if prompt := st.chat_input("예: 칼빈은 예정론을 어떻게 정의하는가?"):
+    # 입력 가드 — Length + (선택) OpenAI Moderation
+    input_guard = get_input_guardrail()
+    input_decision = input_guard.check(prompt, GuardrailDirection.INPUT)
+    if not input_decision.allow:
+        with st.chat_message("user"):
+            st.markdown(prompt[:500] + ("…" if len(prompt) > 500 else ""))
+        with st.chat_message("assistant"):
+            st.error(f"입력 차단: {input_decision.reason}")
+        st.stop()
+
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -420,6 +453,11 @@ if prompt := st.chat_input("예: 칼빈은 예정론을 어떻게 정의하는�
             answer = result["final_answer"]
             kg_metadata = result["metadata"]
             source_documents = result["source_documents"]
+
+            # 출력 가드 — KeywordGuard + (선택) Moderation
+            answer, guard_warning = _apply_output_guard(answer)
+            if guard_warning:
+                st.caption(f"가드: {guard_warning}")
 
             st.markdown(answer)
             _render_kg_meta(kg_metadata, source_documents)
@@ -455,6 +493,10 @@ if prompt := st.chat_input("예: 칼빈은 예정론을 어떻게 정의하는�
             meta: dict[str, Any] = agentic_rag._last_metadata or {}
             answer: str = final_answer_buf or meta.get("final_answer", "")
             if answer:
+                # 출력 가드 적용
+                answer, guard_warning = _apply_output_guard(answer)
+                if guard_warning:
+                    st.caption(f"가드: {guard_warning}")
                 st.markdown(answer)
             tool_calls = meta.get("tool_calls", [])
             source_documents_agentic = meta.get("source_documents", [])
@@ -499,6 +541,13 @@ if prompt := st.chat_input("예: 칼빈은 예정론을 어떻게 정의하는�
                     prompt, chat_history=history, callbacks=[tracker]
                 )
                 answer = st.write_stream(stream_gen)
+
+            # Hybrid 모드는 토큰 스트리밍 후 가드 적용 (마스킹 시 화면 갱신)
+            sanitized, guard_warning = _apply_output_guard(answer)
+            if sanitized != answer:
+                # 답변이 가드에 의해 변경됨 — 안내 표시 (스트리밍 답변은 그대로 두고 caption 으로)
+                st.caption(f"가드: {guard_warning}")
+                answer = sanitized
 
             meta = hybrid_rag._last_metadata or {}
             sources = meta.get("source_pages", [])

@@ -22,6 +22,11 @@ import streamlit as st  # noqa: E402
 
 from infra.usage_tracker import SessionStats, UsageTracker  # noqa: E402
 from rag_core.calvin_builder import build_calvin_rag  # noqa: E402
+from rag_core.guardrail import (  # noqa: E402
+    GuardrailDirection,
+    get_input_guardrail,
+    get_output_guardrail,
+)
 from rag_core.mode_dispatcher import compare_all_modes  # noqa: E402
 
 _DEFAULT_MODEL = "gpt-4o-mini"
@@ -146,6 +151,13 @@ if not prompt:
         "- 이신칭의의 정의를 한 단락으로 설명해줘"
     )
 else:
+    # 입력 가드 — 비교 페이지도 동일 정책
+    input_guard = get_input_guardrail()
+    input_decision = input_guard.check(prompt, GuardrailDirection.INPUT)
+    if not input_decision.allow:
+        st.error(f"입력 차단: {input_decision.reason}")
+        st.stop()
+
     st.markdown(f"### 질문\n> {prompt}")
 
     hybrid = _get_hybrid()
@@ -170,6 +182,7 @@ else:
             callbacks_per_mode=callbacks_per_mode,
         )
 
+    output_guard = get_output_guardrail()
     cols = st.columns(len(results))
     for col, result in zip(cols, results, strict=False):
         with col:
@@ -178,7 +191,18 @@ else:
                 st.error(result.error)
                 continue
             st.caption(f"응답 시간 {result.elapsed:.2f}초")
-            st.markdown(result.answer)
+
+            # 출력 가드 — 모드별 답변에 동일 적용
+            out_decision = output_guard.check(
+                result.answer, GuardrailDirection.OUTPUT
+            )
+            if not out_decision.allow:
+                st.warning("답변이 정책에 의해 필터링되었습니다.")
+                continue
+            displayed_answer = out_decision.sanitized or result.answer
+            if out_decision.sanitized:
+                st.caption(f"가드: {out_decision.reason}")
+            st.markdown(displayed_answer)
             if result.mode_name == "Knowledge Graph":
                 _render_kg_subgraph(result.metadata)
             with st.expander("메타데이터"):
