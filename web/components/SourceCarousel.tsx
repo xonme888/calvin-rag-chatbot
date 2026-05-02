@@ -5,16 +5,22 @@ import type { CitationLabel } from "@/lib/api";
 interface Props {
   sources: string[];
   labels: Array<CitationLabel | null>;
-  highlightedPage?: number | null; // 인라인 [p.N] 클릭 시 활성 카드 표시 (C5)
+  highlightedPage?: number | null; // 인라인 [p.N] 클릭 시 활성 카드 표시
+  onCardClick?: (index: number) => void; // 1-indexed
 }
 
 /**
  * 답변 *위*에 가로 스크롤 출처 카드 N개. Perplexity 스타일.
  * - 라벨: "p.780 (3권 21장)" 또는 "p.50" (5단원 외)
- * - 카드 클릭 영역: 미리보기 240자
- * - highlightedPage: 인라인 [p.N] 클릭 시 해당 카드 강조 (C5에서 활성)
+ * - 카드 클릭 시 SourcePreviewDrawer 열기 (P-B3)
+ * - highlightedPage: 인라인 [p.N] 클릭 시 해당 카드 강조
  */
-export function SourceCarousel({ sources, labels, highlightedPage }: Props) {
+export function SourceCarousel({
+  sources,
+  labels,
+  highlightedPage,
+  onCardClick,
+}: Props) {
   if (sources.length === 0) return null;
 
   return (
@@ -32,16 +38,24 @@ export function SourceCarousel({ sources, labels, highlightedPage }: Props) {
           const isHighlighted =
             highlightedPage != null && label?.page === highlightedPage;
           const preview = src.replace(/\n/g, " ").slice(0, 200);
+          const interactive = !!onCardClick;
 
           return (
-            <div
+            <button
               key={i}
+              type="button"
+              disabled={!interactive}
+              onClick={() => onCardClick?.(i + 1)}
               className={[
-                "shrink-0 w-64 rounded-md border bg-white p-3 text-xs transition-colors",
+                "shrink-0 w-64 rounded-md border bg-white p-3 text-xs transition-colors text-left",
                 isHighlighted
                   ? "border-primary ring-2 ring-primary/30"
                   : "border-slate-200",
+                interactive
+                  ? "hover:border-primary hover:bg-primary/5 cursor-pointer"
+                  : "cursor-default",
               ].join(" ")}
+              aria-label={`${display} 출처 발췌 보기`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span
@@ -58,7 +72,7 @@ export function SourceCarousel({ sources, labels, highlightedPage }: Props) {
                 {preview}
                 {src.length > 200 ? "…" : ""}
               </p>
-            </div>
+            </button>
           );
         })}
       </div>

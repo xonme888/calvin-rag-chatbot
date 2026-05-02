@@ -16,6 +16,8 @@ import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
 import { SourceCarousel } from "./SourceCarousel";
+import { SourcePreviewDrawer } from "./SourcePreviewDrawer";
+import type { SourceItem } from "./SourcePreviewDrawer";
 import { SuggestedPrompts } from "./SuggestedPrompts";
 
 interface UIMessage {
@@ -65,6 +67,10 @@ export function ChatPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [drawer, setDrawer] = useState<{
+    items: SourceItem[];
+    highlightedIndex?: number;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 모드 목록 로드
@@ -195,6 +201,12 @@ export function ChatPanel() {
       </div>
 
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <SourcePreviewDrawer
+        open={drawer !== null}
+        items={drawer?.items ?? []}
+        highlightedIndex={drawer?.highlightedIndex}
+        onClose={() => setDrawer(null)}
+      />
 
       {/* 대화 영역 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -207,6 +219,31 @@ export function ChatPanel() {
           const isLastAssistant =
             m.role === "assistant" && i === messages.length - 1 && !m.streaming;
           const isAssistantMsg = m.role === "assistant";
+
+          // drawer items 빌드 — sources 전부를 SourceItem 배열로
+          const buildItems = (): SourceItem[] =>
+            sources.map((content, idx) => ({
+              index: idx + 1,
+              label: labels[idx] ?? null,
+              content,
+            }));
+
+          // 인라인 [p.N] 클릭 → 해당 page 의 첫 카드를 highlight
+          const handleCitationClick = (page: number) => {
+            let hi: number | undefined;
+            for (let k = 0; k < labels.length; k++) {
+              if (labels[k]?.page === page) {
+                hi = k + 1;
+                break;
+              }
+            }
+            setDrawer({ items: buildItems(), highlightedIndex: hi });
+          };
+
+          // carousel 카드 클릭 → 해당 카드를 highlight
+          const handleCardClick = (index1Based: number) => {
+            setDrawer({ items: buildItems(), highlightedIndex: index1Based });
+          };
           return (
             <div
               key={i}
@@ -227,7 +264,11 @@ export function ChatPanel() {
               )}
               {/* 답변 위 출처 carousel (Perplexity 스타일) */}
               {isAssistantMsg && sources.length > 0 && (
-                <SourceCarousel sources={sources} labels={labels} />
+                <SourceCarousel
+                  sources={sources}
+                  labels={labels}
+                  onCardClick={handleCardClick}
+                />
               )}
               {/* 답변 본문 — assistant 면 markdown + 인라인 [p.N] 치환 */}
               {isAssistantMsg ? (
@@ -235,6 +276,7 @@ export function ChatPanel() {
                   content={m.content}
                   sources={sources}
                   labels={labels}
+                  onCitationClick={handleCitationClick}
                 />
               ) : (
                 <div className="whitespace-pre-wrap leading-relaxed">
