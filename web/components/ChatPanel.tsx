@@ -15,6 +15,7 @@ import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
 import { SourceCarousel } from "./SourceCarousel";
+import { SuggestedPrompts } from "./SuggestedPrompts";
 
 interface UIMessage {
   role: "user" | "assistant";
@@ -74,6 +75,11 @@ export function ChatPanel() {
     if (!input.trim() || busy) return;
     const question = input.trim();
     setInput("");
+    await sendQuestion(question);
+  }
+
+  async function sendQuestion(question: string) {
+    if (busy) return;
     setError(null);
     setBusy(true);
 
@@ -181,9 +187,7 @@ export function ChatPanel() {
       {/* 대화 영역 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
-          <div className="text-center text-slate-400 py-12">
-            <p className="text-sm">예: 칼빈은 예정론을 어떻게 정의하는가?</p>
-          </div>
+          <SuggestedPrompts onPick={sendQuestion} disabled={busy} />
         )}
         {messages.map((m, i) => {
           const { sources, labels } = extractSources(m);
