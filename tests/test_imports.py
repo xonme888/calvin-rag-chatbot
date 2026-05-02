@@ -61,6 +61,9 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "api.routes.stats",
     "api.routes.chat",
     "api.middleware",
+    "api.middleware.audit_log",
+    "api.middleware.rate_limiter",
+    "api.middleware.token_budget",
 )
 
 

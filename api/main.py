@@ -25,7 +25,11 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
+from api.middleware.rate_limiter import limiter
 from api.routes import chat, health, stats
 
 app = FastAPI(
@@ -43,6 +47,19 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Rate limiter — IP 단위 (env: RATE_LIMIT_PER_MINUTE, RATE_LIMIT_PER_DAY)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_exceeded_handler(request, exc):  # type: ignore[no-untyped-def]
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded: {exc.detail}"},
+    )
+
 
 app.include_router(health.router)
 app.include_router(stats.router)

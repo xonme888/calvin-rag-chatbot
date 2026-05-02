@@ -13,7 +13,7 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from sse_starlette.sse import EventSourceResponse
 
@@ -25,12 +25,25 @@ from api.dependencies import (
     get_kg_rag_or_none,
     get_session_stats,
 )
+from api.middleware.audit_log import AuditRecord, log_chat
+from api.middleware.rate_limiter import limiter
+from api.middleware.token_budget import check_token_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from infra.usage_tracker import UsageTracker
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 _MODEL = "gpt-4o-mini"
+
+
+def _client_ip(request: Request) -> str:
+    """X-Forwarded-For (CF/proxy) 우선, fallback은 직접 IP."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    if request.client is not None:
+        return request.client.host
+    return "unknown"
 
 
 def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
@@ -74,14 +87,36 @@ def _invoke_sync(req: ChatRequest) -> dict[str, Any]:
 
 
 @router.post("/sync", response_model=ChatSyncResponse)
-async def chat_sync(req: ChatRequest) -> ChatSyncResponse:
+@limiter.limit("10/minute;200/day")
+async def chat_sync(
+    request: Request,
+    req: ChatRequest,
+    background: BackgroundTasks,
+) -> ChatSyncResponse:
     """동기 응답. 디버깅 + Phase B 가드 풀 패스용.
 
-    흐름: 입력 가드 → run_in_executor(mode 호출) → 출력 가드 → 응답
+    흐름: rate limit (slowapi) → token budget → 입력 가드 → mode 호출 → 출력 가드 →
+          audit log 비동기 기록 → 응답
     """
+    ip = _client_ip(request)
+    stats = get_session_stats()
+
+    # 0. Token budget cap (누적치)
+    check_token_budget(stats)
+
     # 1. 입력 가드
     in_allow, in_reason, in_sanitized = check_input_guard(req.question)
     if not in_allow:
+        background.add_task(
+            log_chat,
+            AuditRecord(
+                ip=ip,
+                mode=req.mode,
+                question=req.question,
+                guard_action="input_blocked",
+                guard_reason=in_reason,
+            ),
+        )
         raise HTTPException(status_code=400, detail=f"입력 차단: {in_reason}")
     if in_sanitized is not None:
         req = req.model_copy(update={"question": in_sanitized})
@@ -101,18 +136,38 @@ async def chat_sync(req: ChatRequest) -> ChatSyncResponse:
     metadata = result.get("metadata", {})
 
     # 3. 출력 가드
+    guard_action = "allow"
+    guard_reason: str | None = None
     out_allow, out_reason, out_sanitized = check_output_guard(answer)
     if not out_allow:
-        # 차단 시 fallback 응답 + audit 용 metadata
-        return ChatSyncResponse(
-            answer="답변이 정책에 의해 필터링되었습니다.",
-            source_documents=[],
-            metadata={**metadata, "guard_blocked": True, "guard_reason": out_reason},
-            elapsed_seconds=elapsed,
-        )
-    if out_sanitized is not None:
+        guard_action = "output_blocked"
+        guard_reason = out_reason
+        answer = "답변이 정책에 의해 필터링되었습니다."
+        metadata = {**metadata, "guard_blocked": True, "guard_reason": out_reason}
+        source_documents = []
+    elif out_sanitized is not None:
+        guard_action = "sanitized"
+        guard_reason = out_reason
         answer = out_sanitized
         metadata = {**metadata, "guard_sanitized": True, "guard_reason": out_reason}
+
+    # 4. Audit log 비동기 기록
+    mode_stats = stats.by_mode.get(_mode_key(req.mode))
+    background.add_task(
+        log_chat,
+        AuditRecord(
+            ip=ip,
+            mode=req.mode,
+            question=req.question,
+            answer_preview=answer[:200],
+            tokens_in=mode_stats.input_tokens if mode_stats else 0,
+            tokens_out=mode_stats.output_tokens if mode_stats else 0,
+            cost_krw=mode_stats.cost_krw if mode_stats else 0.0,
+            guard_action=guard_action,
+            guard_reason=guard_reason,
+            elapsed_seconds=elapsed,
+        ),
+    )
 
     return ChatSyncResponse(
         answer=answer,
@@ -120,6 +175,11 @@ async def chat_sync(req: ChatRequest) -> ChatSyncResponse:
         metadata=metadata,
         elapsed_seconds=elapsed,
     )
+
+
+def _mode_key(mode: str) -> str:
+    """API mode 식별자 → SessionStats key."""
+    return {"hybrid": "Hybrid", "agentic": "Agentic", "kg": "Knowledge Graph"}.get(mode, mode)
 
 
 # ====================================================================
@@ -197,17 +257,48 @@ async def _stream_sync_replay(req: ChatRequest):
 
 
 @router.post("/stream")
-async def chat_stream(req: ChatRequest) -> EventSourceResponse:
+@limiter.limit("10/minute;200/day")
+async def chat_stream(
+    request: Request,
+    req: ChatRequest,
+    background: BackgroundTasks,
+) -> EventSourceResponse:
     """SSE 스트리밍. Vercel AI SDK `useChat` 호환 헤더 포함.
 
     출력 가드는 stream 종료 *후* audit 용 (cheap check 만 inline). 본격 출력 가드는 sync 권장.
     """
+    ip = _client_ip(request)
+    stats = get_session_stats()
+    check_token_budget(stats)
+
     # 입력 가드만 inline
     in_allow, in_reason, in_sanitized = check_input_guard(req.question)
     if not in_allow:
+        background.add_task(
+            log_chat,
+            AuditRecord(
+                ip=ip,
+                mode=req.mode,
+                question=req.question,
+                guard_action="input_blocked",
+                guard_reason=in_reason,
+            ),
+        )
         raise HTTPException(status_code=400, detail=f"입력 차단: {in_reason}")
     if in_sanitized is not None:
         req = req.model_copy(update={"question": in_sanitized})
+
+    # stream 시작 — audit log 는 stream 종료 후 별도 (현재는 단순화 위해 시작 시 기록)
+    background.add_task(
+        log_chat,
+        AuditRecord(
+            ip=ip,
+            mode=req.mode,
+            question=req.question,
+            guard_action="stream_started",
+            elapsed_seconds=0.0,
+        ),
+    )
 
     return EventSourceResponse(
         _stream_chat_events(req),

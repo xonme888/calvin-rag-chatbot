@@ -1,0 +1,132 @@
+### Calvin RAG Chatbot — HTTP 요청 모음
+###
+### 사용법:
+###   IntelliJ/PyCharm: 각 요청 옆 ▷ 클릭
+###   VS Code: REST Client 확장 설치 후 "Send Request" 클릭
+###   Cursor: 동일 REST Client 확장 사용
+###
+### 사전: uvicorn api.main:app --reload --port 8000
+
+@host = http://localhost:8000
+
+
+### 1. 헬스 체크
+GET {{host}}/health
+
+
+### 2. 모드 가용성 (KG는 Neo4j 가동 시만 available=true)
+GET {{host}}/modes
+
+
+### 3. 누적 사용 통계 (LLM 호출/토큰/₩비용)
+GET {{host}}/stats
+
+
+### 4. 동기 챗 — Hybrid 모드
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "칼빈은 예정론을 어떻게 정의하는가?",
+  "mode": "hybrid",
+  "dense_weight": 0.5,
+  "chat_history": []
+}
+
+
+### 5. 동기 챗 — Agentic 모드 (도메인 외 질문 자동 거절 시연)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "오늘 날씨 어때?",
+  "mode": "agentic"
+}
+
+
+### 6. 동기 챗 — Knowledge Graph 모드 (Neo4j 가동 + 인덱싱 필요)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "예정론을 둘러싼 칼빈과 어거스틴의 관계는?",
+  "mode": "kg"
+}
+
+
+### 7. 멀티턴 — chat_history 활용 (Hybrid)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "그것은 어거스틴과 어떻게 다른가?",
+  "mode": "hybrid",
+  "chat_history": [
+    {"role": "user", "content": "칼빈은 예정론을 어떻게 정의하는가?"},
+    {"role": "assistant", "content": "칼빈은 예정론을 기독교 신앙의 핵심 교리로 보고..."}
+  ]
+}
+
+
+### 8. SSE 스트리밍 — Hybrid (토큰 단위 응답)
+###   IntelliJ/VS Code 모두 SSE 스트림 표시 지원
+POST {{host}}/chat/stream
+Content-Type: application/json
+Accept: text/event-stream
+
+{
+  "question": "이신칭의를 한 단락으로 설명해줘",
+  "mode": "hybrid"
+}
+
+
+### 9. SSE — Agentic 청크 replay
+POST {{host}}/chat/stream
+Content-Type: application/json
+Accept: text/event-stream
+
+{
+  "question": "칼빈이 비판한 신학자들과 그들의 주장은?",
+  "mode": "agentic"
+}
+
+
+### 10. 입력 가드 — 길이 초과 (LengthGuard 가 차단해야)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "{{$random.alphabetic 2500}}",
+  "mode": "hybrid"
+}
+
+
+### 11. 입력 가드 — 빈 질문 (Pydantic min_length=1)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "",
+  "mode": "hybrid"
+}
+
+
+### 12. 잘못된 mode (Pydantic Literal 검증)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "Q",
+  "mode": "unknown"
+}
+
+
+### 13. dense_weight 범위 외 (0~1, Pydantic ge/le)
+POST {{host}}/chat/sync
+Content-Type: application/json
+
+{
+  "question": "Q",
+  "mode": "hybrid",
+  "dense_weight": 2.0
+}
