@@ -11,6 +11,7 @@ import type {
   ModeInfo,
 } from "@/lib/api";
 import { AboutModal } from "./AboutModal";
+import { FollowupChips } from "./FollowupChips";
 import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
@@ -43,6 +44,17 @@ function extractSources(msg: UIMessage): {
     return { sources: msg.meta.source_documents, labels };
   }
   return { sources: [], labels: [] };
+}
+
+// sync metadata 또는 stream meta 에서 후속 질문 추출
+function extractFollowups(msg: UIMessage): string[] {
+  const candidate = msg.streamMeta?.suggested_followups
+    ?? (msg.meta?.metadata.suggested_followups as string[] | undefined);
+  return Array.isArray(candidate) ? candidate.filter((q) => typeof q === "string") : [];
+}
+
+function isAssistant(msg: UIMessage): boolean {
+  return msg.role === "assistant";
 }
 
 export function ChatPanel() {
@@ -191,7 +203,10 @@ export function ChatPanel() {
         )}
         {messages.map((m, i) => {
           const { sources, labels } = extractSources(m);
-          const isAssistant = m.role === "assistant";
+          const followups = isAssistant(m) ? extractFollowups(m) : [];
+          const isLastAssistant =
+            m.role === "assistant" && i === messages.length - 1 && !m.streaming;
+          const isAssistantMsg = m.role === "assistant";
           return (
             <div
               key={i}
@@ -203,7 +218,7 @@ export function ChatPanel() {
               ].join(" ")}
             >
               {/* 답변 헤더 meta 행 (응답시간 · 모드 · 토큰 · 신뢰도) */}
-              {isAssistant && (m.meta || m.streamMeta) && (
+              {isAssistantMsg && (m.meta || m.streamMeta) && (
                 <MessageHeader
                   mode={mode}
                   syncMeta={m.meta}
@@ -211,11 +226,11 @@ export function ChatPanel() {
                 />
               )}
               {/* 답변 위 출처 carousel (Perplexity 스타일) */}
-              {isAssistant && sources.length > 0 && (
+              {isAssistantMsg && sources.length > 0 && (
                 <SourceCarousel sources={sources} labels={labels} />
               )}
               {/* 답변 본문 — assistant 면 markdown + 인라인 [p.N] 치환 */}
-              {isAssistant ? (
+              {isAssistantMsg ? (
                 <MarkdownAnswer
                   content={m.content}
                   sources={sources}
@@ -226,10 +241,18 @@ export function ChatPanel() {
                   {m.content}
                 </div>
               )}
-              {isAssistant && m.streaming && (
+              {isAssistantMsg && m.streaming && (
                 <span className="inline-block ml-1 animate-pulse text-slate-400">
                   ▍
                 </span>
+              )}
+              {/* 후속 질문 chip — 마지막 답변에만 노출 (스크롤 거슬림 방지) */}
+              {isLastAssistant && followups.length > 0 && (
+                <FollowupChips
+                  questions={followups}
+                  onPick={sendQuestion}
+                  disabled={busy}
+                />
               )}
             </div>
           );

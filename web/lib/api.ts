@@ -39,6 +39,7 @@ export interface ChatStreamMeta {
   pattern: string;
   mode: Mode;
   tokens: { input: number; output: number };
+  suggested_followups?: string[];
 }
 
 export interface ChatSyncResponse {

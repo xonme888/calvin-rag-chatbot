@@ -214,6 +214,8 @@ class KnowledgeGraphRAG:
 
         elapsed = time.time() - start
 
+        from rag_core.followup import generate_followups
+
         return {
             "final_answer": answer,
             "source_documents": [d.page_content for d in top_docs],
@@ -227,6 +229,7 @@ class KnowledgeGraphRAG:
                 "vector_count": len(top_docs),
                 "elapsed_seconds": elapsed,
                 "source_pages": [d.metadata.get("page") for d in top_docs],
+                "suggested_followups": generate_followups(question, answer, self.llm),
             },
         }
 

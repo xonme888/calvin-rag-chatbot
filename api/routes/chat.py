@@ -259,6 +259,7 @@ async def _stream_hybrid(req: ChatRequest):
             "input": mode_stats.input_tokens if mode_stats else 0,
             "output": mode_stats.output_tokens if mode_stats else 0,
         },
+        "suggested_followups": last_meta.get("suggested_followups", []),
     }
     yield {
         "event": "meta",

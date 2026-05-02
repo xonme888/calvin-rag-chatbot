@@ -258,6 +258,7 @@ class HybridRAG:
         answer = response.answer
 
         from rag_core.citation_label import labels_for_pages
+        from rag_core.followup import generate_followups
 
         metadata: dict[str, Any] = {
             "pattern": self.PATTERN_NAME,
@@ -272,6 +273,7 @@ class HybridRAG:
             "confidence": response.confidence,
             "cited_pages": response.cited_pages,
             "is_grounded": None,  # Self-RAG에서 채워짐
+            "suggested_followups": generate_followups(question, answer, self.llm),
         }
 
         return {
@@ -538,6 +540,7 @@ class HybridRAG:
         cited_pages = extract_cited_pages_from_text(answer_text)
         # source_pages_label: 0-indexed page → 권/장 라벨
         from rag_core.citation_label import labels_for_pages
+        from rag_core.followup import generate_followups
 
         source_pages_label = labels_for_pages(
             [d.metadata.get("page") for d in top_docs]
@@ -556,6 +559,7 @@ class HybridRAG:
             "confidence": None,
             "cited_pages": cited_pages,
             "is_grounded": None,
+            "suggested_followups": generate_followups(question, answer_text, self.llm),
         }
 
 

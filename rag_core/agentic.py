@@ -331,6 +331,8 @@ class AgenticRAG:
         total_lookups = cache_hits + cache_misses
         cache_hit_rate = (cache_hits / total_lookups) if total_lookups else 0.0
 
+        from rag_core.followup import generate_followups
+
         return {
             "final_answer": parsed.final_answer,
             "source_documents": parsed.source_documents,
@@ -344,6 +346,9 @@ class AgenticRAG:
                 "cache_hit_rate": round(cache_hit_rate, 3),
                 "llm_calls": llm_calls,
                 "model": self.config.openai_model,
+                "suggested_followups": generate_followups(
+                    question, parsed.final_answer, self.llm
+                ),
             },
         }
 
@@ -418,6 +423,8 @@ class AgenticRAG:
         total_lookups = cache_hits + cache_misses
         cache_hit_rate = (cache_hits / total_lookups) if total_lookups else 0.0
 
+        from rag_core.followup import generate_followups
+
         self._last_metadata = {
             "pattern": self.PATTERN_NAME,
             "tool_calls": tool_calls,
@@ -430,4 +437,5 @@ class AgenticRAG:
             "model": self.config.openai_model,
             "source_documents": source_docs,
             "final_answer": final_answer,
+            "suggested_followups": generate_followups(question, final_answer, self.llm),
         }
