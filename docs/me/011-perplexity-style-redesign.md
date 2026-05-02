@@ -116,7 +116,7 @@
 
 ## 면접 어필 한 줄
 
-> "Spring AI Advisor 체인을 LangGraph 노드로 재구현해 SSE `stream_mode=updates`로 단계 emit, `with_structured_output(RAGResponse)`로 LLM이 인용 페이지 자체를 구조화 반환합니다 — 정규식 후처리 0."
+> "LangGraph 노드를 SSE `stream_mode=updates` 로 emit 하고 `with_structured_output(RAGResponse)` 로 LLM 이 인용 페이지를 구조화 반환합니다 — 정규식 후처리 0. 자바 Spring AI 사용처에선 Advisor 체인이 같은 역할을 하지만, 본 프로젝트는 Python LangChain/LangGraph로 *직접* 구현된 것이며 Spring AI 이식이 아닙니다."
 
 ## 회피 사항
 

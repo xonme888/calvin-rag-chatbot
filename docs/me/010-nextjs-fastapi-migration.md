@@ -51,7 +51,7 @@ WebSocket은 음성/멀티모달 보조 채널이며 **텍스트 챗봇의 1차 
 | `@Async` + `BackgroundJobManager` | FastAPI `BackgroundTasks` | audit log 비동기 |
 | Micrometer + Actuator | `usage_tracker` 콜백 + `/health`, `/stats` | 관측성 |
 
-**면접 한 줄**: "Spring AI Advisor 체인을 Python Hexagonal로 재구현했고, WebFlux Flux 대신 FastAPI async generator + SSE로 스트리밍을 구현했습니다."
+**면접 한 줄**: "Hexagonal Port/Adapter 로 가드/RAG 코어를 추상화하고 FastAPI async generator + SSE 로 스트리밍을 구현했습니다. 자바 관점에서 보면 `GuardrailPort` 체인은 Spring AI Advisor 체인과, async generator + SSE 는 WebFlux `Flux<ServerSentEvent>` 와 같은 역할입니다 — 패턴 *비교* 차원이고 Spring AI 코드를 옮긴 것은 아닙니다."
 
 ## 마이그레이션 단계 (~6일)
 
@@ -169,7 +169,7 @@ async def verify_cf_jwt(cf_jwt: str = Header(alias="Cf-Access-Jwt-Assertion")):
 >
 > 그래서 6일 마이그레이션 계획을 박제했습니다. 핵심은 **이미 도입한 Hexagonal Port/Adapter (`RetrieverPort`/`KnowledgeGraphPort`/`GuardrailPort`)가 마이그레이션 비용을 0에 가깝게 만든다는 점**입니다. RAG 코어는 그대로 import해 FastAPI 라우트에 마운트하고, Streamlit은 시연일까지 thin client로 위험 분산용으로 살려둔 뒤 폐기합니다.
 >
-> Spring AI Advisor 체인을 Python Hexagonal로 재구현했고, WebFlux Flux 대신 FastAPI async generator + SSE로 스트리밍을 구현했습니다. Spring Security ↔ Cloudflare Access + JWT 검증 미들웨어로 1:1 매핑됩니다."
+> Hexagonal Port/Adapter 로 가드/RAG 코어를 추상화하고 FastAPI async generator + SSE 로 스트리밍을 구현했습니다. 자바 관점에서 매핑하면 `GuardrailPort` 체인은 Spring AI Advisor 체인과, async generator 는 WebFlux `Flux` 와, Cloudflare Access JWT 검증은 Spring Security `SecurityFilterChain` 과 같은 역할입니다 — *패턴 비교* 차원이고 Spring AI 코드를 옮긴 것은 아닙니다."
 
 ## 검증 체크리스트 (Phase 2 완료 시점)
 
