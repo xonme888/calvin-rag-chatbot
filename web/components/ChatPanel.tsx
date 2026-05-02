@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes } from "@/lib/api";
 import type {
   CitationLabel,
@@ -9,6 +10,7 @@ import type {
   Mode,
   ModeInfo,
 } from "@/lib/api";
+import { AboutModal } from "./AboutModal";
 import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
@@ -49,6 +51,7 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 모드 목록 로드
@@ -159,14 +162,21 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* 헤더 — 모드 셀렉터 */}
-      <div className="px-4 py-3 border-b border-slate-200 bg-white">
-        <h1 className="text-lg font-semibold mb-2">칼빈 신학 챗봇</h1>
-        <p className="text-xs text-slate-500 mb-2">
-          Hybrid (BM25+Dense+RRF) / Agentic (create_agent) / Knowledge Graph (Neo4j)
-        </p>
-        <ModeSelector modes={modes} current={mode} onChange={setMode} />
+      {/* 헤더 — 미니멀: 타이틀 + 정보 아이콘만 */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+        <h1 className="text-lg font-semibold">칼빈 신학 챗봇</h1>
+        <button
+          type="button"
+          onClick={() => setAboutOpen(true)}
+          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+          aria-label="소개 열기"
+          title="소개"
+        >
+          <Info size={18} />
+        </button>
       </div>
+
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       {/* 대화 영역 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -222,32 +232,34 @@ export function ChatPanel() {
         })}
       </div>
 
-      {/* 입력 */}
+      {/* 입력 영역 — 모드 토글이 입력창 위 */}
       {error && (
         <div className="px-4 py-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
           {error}
         </div>
       )}
-      <form
-        onSubmit={handleSubmit}
-        className="border-t border-slate-200 bg-white px-4 py-3 flex gap-2"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="질문을 입력하세요…"
-          disabled={busy}
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:bg-slate-100"
-        />
-        <button
-          type="submit"
-          disabled={busy || !input.trim()}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          {busy ? "전송 중…" : "전송"}
-        </button>
-      </form>
+      <div className="border-t border-slate-200 bg-white px-4 pt-3 pb-3">
+        <div className="mb-2">
+          <ModeSelector modes={modes} current={mode} onChange={setMode} />
+        </div>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="질문을 입력하세요…"
+            disabled={busy}
+            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:bg-slate-100"
+          />
+          <button
+            type="submit"
+            disabled={busy || !input.trim()}
+            className="rounded-md bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
+          >
+            {busy ? "전송 중…" : "전송"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
