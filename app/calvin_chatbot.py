@@ -32,7 +32,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import streamlit as st  # noqa: E402
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage  # noqa: E402
 
-from rag_core.builder import build_calvin_rag  # noqa: E402
+from rag_core.calvin_builder import build_calvin_rag  # noqa: E402
 
 
 def _messages_to_history(messages: list[dict]) -> list[BaseMessage]:
@@ -138,7 +138,7 @@ def get_kg_rag():
     Neo4j 미가동 시 명확한 에러를 띄움 (graceful degradation).
     """
     from rag_core.kg.factory import get_kg_adapter
-    from rag_core.kg.rag import KnowledgeGraphRAG
+    from rag_core.kg.pipeline import KnowledgeGraphRAG
 
     adapter = get_kg_adapter()
     if not adapter.health_check():
@@ -201,7 +201,7 @@ def _render_kg_meta(
     subgraph_dict = metadata.get("subgraph", {})
     if subgraph_dict.get("nodes"):
         from rag_core.kg.port import SubgraphData
-        from rag_core.kg.visualization import to_agraph_format
+        from rag_core.kg.graph_renderer import to_agraph_format
 
         subgraph = SubgraphData(**subgraph_dict)
         try:

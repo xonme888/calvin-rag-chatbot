@@ -5,7 +5,9 @@ Hexagonal Architecture:
 - ``neo4j_adapter.Neo4jAdapter``: Port 구현 (langchain-neo4j 기반)
 - ``config.Neo4jConfig``: 환경(local/aura) 자동 감지
 - ``factory.get_kg_adapter``: 환경 기반 어댑터 인스턴스 생성
-- ``rag.KnowledgeGraphRAG``: Port에 의존하는 RAG 본체 (어댑터 무관)
+- ``pipeline.KnowledgeGraphRAG``: Port에 의존하는 RAG 본체 (어댑터 무관)
+- ``section_filter``: 단원 page 필터 + 비용 추정
+- ``graph_renderer``: SubgraphData → streamlit-agraph 변환
 
 향후 ``Neo4jAdapter`` 외에 ``NetworkXAdapter`` 등을 추가해도
 ``KnowledgeGraphRAG`` 코드는 무수정.

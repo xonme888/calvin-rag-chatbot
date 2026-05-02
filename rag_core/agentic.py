@@ -152,7 +152,7 @@ class AgenticRAG:
 
         # Hybrid 인프라 컴포지션. build_calvin_rag()는 인덱스 캐시 사용.
         if hybrid_rag is None:
-            from rag_core.builder import build_calvin_rag
+            from rag_core.calvin_builder import build_calvin_rag
 
             hybrid_rag = build_calvin_rag()
         self.hybrid: HybridRAG = hybrid_rag

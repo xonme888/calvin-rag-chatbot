@@ -70,7 +70,7 @@ class HybridRAGConfig(BaseSettings):
     # 시스템 프롬프트 — 도메인별 외부 주입 가능, ``{context}`` 자리표시자 필수
     system_prompt: Annotated[str, Field(alias="SYSTEM_PROMPT")] = DEFAULT_SYSTEM_PROMPT
 
-    # Reranker 토글 — True 시 ``rag_core.postprocess`` 의 FlashRankReranker 적용
+    # Reranker 토글 — True 시 ``rag_core.reranker`` 의 FlashRankReranker 적용
     # 활성화 전제: ``uv pip install -e '.[rerank]'``
     reranker_enabled: Annotated[bool, Field(alias="RERANKER_ENABLED")] = False
     reranker_top_k: Annotated[int, Field(alias="RERANKER_TOP_K")] = 5
@@ -326,7 +326,7 @@ class HybridRAG:
         config.reranker_enabled=True 시에만 그래프에 포함.
         flashrank lazy import — 미설치 시 명확한 ImportError.
         """
-        from rag_core.postprocess import FlashRankReranker, rerank_and_reorder
+        from rag_core.reranker import FlashRankReranker, rerank_and_reorder
 
         if self._reranker is None:
             self._reranker = FlashRankReranker()
@@ -535,7 +535,7 @@ class HybridRAG:
 
         # 2. Reranker (활성화 시)
         if self.config.reranker_enabled:
-            from rag_core.postprocess import FlashRankReranker, rerank_and_reorder
+            from rag_core.reranker import FlashRankReranker, rerank_and_reorder
 
             if self._reranker is None:
                 self._reranker = FlashRankReranker()

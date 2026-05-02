@@ -10,7 +10,7 @@ from infra.document_loader import (
     load_pdf,
     load_text_file,
 )
-from infra.env import load_env
+from infra.env_loader import load_env
 from infra.index_cache import (
     INDEX_DIR,
     build_or_load_faiss,

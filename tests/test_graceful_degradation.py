@@ -116,8 +116,8 @@ def test_agentic_module_independent_of_kg() -> None:
 
 
 def test_builder_module_independent_of_kg() -> None:
-    """rag_core.builder (칼빈 도메인 빌더) 도 KG 무관."""
-    import rag_core.builder as builder_module
+    """rag_core.calvin_builder (칼빈 도메인 빌더) 도 KG 무관."""
+    import rag_core.calvin_builder as builder_module
 
     has_dep, found = _module_imports_kg_or_neo4j(builder_module)
     assert not has_dep, f"Builder가 KG에 의존함: {found}"
@@ -132,8 +132,8 @@ def test_tokenizer_module_independent_of_kg() -> None:
 
 
 def test_postprocess_module_independent_of_kg() -> None:
-    """rag_core.postprocess 도 KG 무관."""
-    import rag_core.postprocess as pp_module
+    """rag_core.reranker 도 KG 무관."""
+    import rag_core.reranker as pp_module
 
     has_dep, found = _module_imports_kg_or_neo4j(pp_module)
     assert not has_dep, f"Postprocess가 KG에 의존함: {found}"

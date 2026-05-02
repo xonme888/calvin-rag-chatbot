@@ -29,9 +29,9 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from infra.document_loader import load_calvin  # noqa: E402
-from infra.env import load_env  # noqa: E402
-from rag_core.builder import build_calvin_rag  # noqa: E402
-from rag_core.kg.extractor import (  # noqa: E402
+from infra.env_loader import load_env  # noqa: E402
+from rag_core.calvin_builder import build_calvin_rag  # noqa: E402
+from rag_core.kg.section_filter import (  # noqa: E402
     DEFAULT_CALVIN_SECTIONS,
     estimate_cost,
     filter_chunks_by_sections,

@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from langchain_core.documents import Document
 
-from rag_core.kg.extractor import (
+from rag_core.kg.section_filter import (
     DEFAULT_CALVIN_SECTIONS,
     estimate_cost,
     filter_chunks_by_sections,
