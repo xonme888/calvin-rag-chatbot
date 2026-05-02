@@ -209,7 +209,7 @@ class AgenticRAG:
         """문서를 인덱싱한다 (hybrid에 위임)."""
         return self.hybrid.index_documents(documents)
 
-    def query(self, question: str) -> dict[str, Any]:
+    def query(self, question: str, callbacks: list[Any] | None = None) -> dict[str, Any]:
         """질문에 답한다 (Agent가 도구 호출 자율 결정).
 
         Returns:
@@ -227,9 +227,12 @@ class AgenticRAG:
         self._llm_tracker.reset()
 
         input_state: dict[str, Any] = {"messages": [HumanMessage(content=question)]}
+        cb_list: list[Any] = [self._llm_tracker]
+        if callbacks:
+            cb_list.extend(callbacks)
         config: dict[str, Any] = {
             "recursion_limit": self.config.recursion_limit,
-            "callbacks": [self._llm_tracker],
+            "callbacks": cb_list,
         }
 
         final_state: dict[str, Any] = self._agent.invoke(input_state, config=config)
@@ -285,7 +288,7 @@ class AgenticRAG:
             },
         }
 
-    def stream_steps(self, question: str):
+    def stream_steps(self, question: str, callbacks: list[Any] | None = None):
         """LangGraph stream(updates 모드)으로 Agent 실행 단계를 yield한다.
 
         토큰 단위 스트리밍이 아니라 노드 단위 진행 상황을 친화적 메시지로 yield.
@@ -307,9 +310,12 @@ class AgenticRAG:
         self._llm_tracker.reset()
 
         input_state: dict[str, Any] = {"messages": [HumanMessage(content=question)]}
+        cb_list: list[Any] = [self._llm_tracker]
+        if callbacks:
+            cb_list.extend(callbacks)
         config: dict[str, Any] = {
             "recursion_limit": self.config.recursion_limit,
-            "callbacks": [self._llm_tracker],
+            "callbacks": cb_list,
         }
 
         tool_calls: list[dict[str, Any]] = []

@@ -471,6 +471,7 @@ class HybridRAG:
         self,
         question: str,
         chat_history: list[BaseMessage] | None = None,
+        callbacks: list[Any] | None = None,
     ) -> dict[str, Any]:
         """그래프를 실행하고 통일 인터페이스 형태로 반환한다.
 
@@ -486,7 +487,10 @@ class HybridRAG:
         initial_state: HybridRAGState = {"question": question}
         if chat_history:
             initial_state["chat_history"] = chat_history
-        final_state: HybridRAGState = self._graph.invoke(initial_state)  # type: ignore[assignment]
+        invoke_config: dict[str, Any] = {}
+        if callbacks:
+            invoke_config["callbacks"] = callbacks
+        final_state: HybridRAGState = self._graph.invoke(initial_state, config=invoke_config)  # type: ignore[assignment]
 
         top_docs: list[Document] = final_state.get("top_docs", [])
         metadata: dict[str, Any] = dict(final_state.get("metadata", {}))
@@ -507,6 +511,7 @@ class HybridRAG:
         self,
         question: str,
         chat_history: list[BaseMessage] | None = None,
+        callbacks: list[Any] | None = None,
     ):
         """답변 토큰을 yield하는 generator. Streamlit ``st.write_stream`` 호환.
 
@@ -551,12 +556,16 @@ class HybridRAG:
         chain = self._prompt | self.llm
         full_text: list[str] = []
 
+        stream_config: dict[str, Any] = {}
+        if callbacks:
+            stream_config["callbacks"] = callbacks
         for chunk in chain.stream(
             {
                 "context": context,
                 "question": question,
                 "chat_history": chat_history or [],
-            }
+            },
+            config=stream_config,
         ):
             text = chunk.content if hasattr(chunk, "content") else str(chunk)
             if text:

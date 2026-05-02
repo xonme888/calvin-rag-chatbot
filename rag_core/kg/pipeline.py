@@ -152,7 +152,7 @@ class KnowledgeGraphRAG:
         chain = self._extract_prompt | self.llm.with_structured_output(EntityExtraction)
         return chain.invoke({"question": question})  # type: ignore[return-value]
 
-    def query(self, question: str) -> dict[str, Any]:
+    def query(self, question: str, callbacks: list[Any] | None = None) -> dict[str, Any]:
         """질문에 답한다 (KG 부분 그래프 + 벡터 검색 결합).
 
         Returns:
@@ -176,6 +176,10 @@ class KnowledgeGraphRAG:
             raise RuntimeError("Hybrid RAG가 인덱싱되어 있지 않습니다.")
 
         start = time.time()
+
+        invoke_config: dict[str, Any] = {}
+        if callbacks:
+            invoke_config["callbacks"] = callbacks
 
         # 1) 엔티티 추출
         extraction = self.extract_entities(question)
@@ -205,7 +209,8 @@ class KnowledgeGraphRAG:
                 "question": question,
                 "graph_text": graph_text,
                 "chunk_text": chunk_text,
-            }
+            },
+            config=invoke_config,
         )
         answer = response.content if hasattr(response, "content") else str(response)
 
