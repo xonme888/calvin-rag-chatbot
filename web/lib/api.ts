@@ -18,6 +18,29 @@ export interface ChatRequest {
   dense_weight?: number;
 }
 
+// 단일 페이지 인용 라벨 — 백엔드 rag_core/citation_label.CitationLabel 와 동기화
+export interface CitationLabel {
+  page: number;
+  section_slug: string | null;
+  section_label: string | null;
+  book: number | null;
+  chapter: number | null;
+  display: string; // 예: "p.780 (3권 21장)" 또는 "p.50"
+}
+
+// SSE stream 종료 직전 emit 되는 메타데이터 (event: meta)
+export interface ChatStreamMeta {
+  cited_pages: number[];
+  source_documents: string[];
+  source_pages: Array<number | null>;
+  source_pages_label: Array<CitationLabel | null>;
+  elapsed_seconds: number | null;
+  confidence: number | null;
+  pattern: string;
+  mode: Mode;
+  tokens: { input: number; output: number };
+}
+
 export interface ChatSyncResponse {
   answer: string;
   source_documents: string[];
@@ -57,11 +80,19 @@ export async function chatSync(req: ChatRequest): Promise<ChatSyncResponse> {
 //   event: message
 //   data: {"type":"text-delta","delta":"..."}
 //
+//   event: meta
+//   data: {cited_pages, source_documents, source_pages_label, elapsed, ...}
+//
 //   event: done
 //   data: [DONE]
 const DEBUG_SSE = process.env.NODE_ENV !== "production";
 
-export async function* chatStream(req: ChatRequest): AsyncGenerator<string> {
+// generator yield 형태 — text-delta 또는 종료 직전 1회 meta
+export type ChatStreamChunk =
+  | { type: "delta"; text: string }
+  | { type: "meta"; meta: ChatStreamMeta };
+
+export async function* chatStream(req: ChatRequest): AsyncGenerator<ChatStreamChunk> {
   const r = await fetch(`${API_BASE}/chat/stream`, {
     method: "POST",
     headers: {
@@ -124,8 +155,13 @@ export async function* chatStream(req: ChatRequest): AsyncGenerator<string> {
 
       try {
         const obj = JSON.parse(payload);
+        // event: meta — 종료 직전 1회 emit (cited_pages, source_pages_label 등)
+        if (eventType === "meta") {
+          yield { type: "meta", meta: obj as ChatStreamMeta };
+          continue;
+        }
         if (obj.type === "text-delta" && typeof obj.delta === "string") {
-          yield obj.delta;
+          yield { type: "delta", text: obj.delta };
         } else if (DEBUG_SSE) {
           // eslint-disable-next-line no-console
           console.warn("[SSE] unknown payload type:", obj);
@@ -133,7 +169,7 @@ export async function* chatStream(req: ChatRequest): AsyncGenerator<string> {
       } catch {
         // JSON 파싱 실패 — payload 가 [DONE] 등 plain text 일 수 있음
         if (payload && payload !== "[DONE]") {
-          yield payload;
+          yield { type: "delta", text: payload };
         }
       }
     }

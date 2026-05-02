@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { chatStream, chatSync, fetchModes } from "@/lib/api";
-import type { ChatSyncResponse, Mode, ModeInfo } from "@/lib/api";
+import type {
+  ChatStreamMeta,
+  ChatSyncResponse,
+  Mode,
+  ModeInfo,
+} from "@/lib/api";
 import { ModeSelector } from "./ModeSelector";
 import { SourceCard } from "./SourceCard";
 
@@ -10,6 +15,7 @@ interface UIMessage {
   role: "user" | "assistant";
   content: string;
   meta?: ChatSyncResponse;
+  streamMeta?: ChatStreamMeta; // Hybrid 모드 stream 종료 후 도착
   streaming?: boolean;
 }
 
@@ -53,11 +59,21 @@ export function ChatPanel() {
 
     try {
       if (mode === "hybrid") {
-        // Hybrid 는 SSE 스트리밍 (UX 임팩트)
+        // Hybrid 는 SSE 스트리밍 (UX 임팩트). delta + 종료 직전 meta 1회 도착.
         let acc = "";
         let chunkCount = 0;
+        let receivedMeta: ChatStreamMeta | undefined;
         for await (const chunk of chatStream({ question, mode })) {
-          acc += chunk;
+          if (chunk.type === "meta") {
+            receivedMeta = chunk.meta;
+            if (process.env.NODE_ENV !== "production") {
+              // eslint-disable-next-line no-console
+              console.debug("[chat] meta 도착", receivedMeta);
+            }
+            continue;
+          }
+          // delta
+          acc += chunk.text;
           chunkCount += 1;
           if (process.env.NODE_ENV !== "production") {
             // eslint-disable-next-line no-console
@@ -82,6 +98,7 @@ export function ChatPanel() {
           next[next.length - 1] = {
             role: "assistant",
             content: acc || "(빈 응답 — 백엔드 SSE 파싱 점검 필요)",
+            streamMeta: receivedMeta,
             streaming: false,
           };
           return next;
