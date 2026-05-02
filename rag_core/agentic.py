@@ -17,7 +17,8 @@ Spring AI 매핑: ``@Tool`` 어노테이션 + ``ChatClient`` 의 ``ToolCallback`
 from __future__ import annotations
 
 import time
-from typing import Annotated, Any
+from dataclasses import dataclass, field
+from typing import Annotated, Any, Iterator
 
 from langchain.agents import create_agent
 from langchain_core.caches import InMemoryCache
@@ -31,6 +32,89 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from rag_core.hybrid import HybridRAG, _format_doc_with_meta
+
+
+# ====================================================================
+# 메시지 파서 — query() 와 stream_steps() 의 메시지 → 정보 추출 책임 분리
+# ====================================================================
+@dataclass
+class AgentParseResult:
+    """Agent 실행 결과 messages에서 추출한 정보."""
+
+    final_answer: str = ""
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    source_documents: list[str] = field(default_factory=list)
+
+
+def parse_agent_messages(messages: list[BaseMessage]) -> AgentParseResult:
+    """Agent 실행 종료 후 messages 리스트를 한 번에 파싱한다.
+
+    Args:
+        messages: ``self._agent.invoke(...)`` 결과의 final_state["messages"].
+
+    Returns:
+        ``AgentParseResult`` — final_answer + tool_calls + source_documents.
+    """
+    final_answer = ""
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and msg.content:
+            content = msg.content
+            if isinstance(content, str) and content.strip():
+                final_answer = content
+                break
+
+    tool_calls: list[dict[str, Any]] = []
+    source_documents: list[str] = []
+    for msg in messages:
+        if isinstance(msg, AIMessage):
+            for tc in getattr(msg, "tool_calls", None) or []:
+                tool_calls.append({"tool": tc.get("name", ""), "args": tc.get("args", {})})
+        if getattr(msg, "name", None) == "search_documents":
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            source_documents.append(content)
+
+    return AgentParseResult(
+        final_answer=final_answer,
+        tool_calls=tool_calls,
+        source_documents=source_documents,
+    )
+
+
+def message_to_stream_events(msg: BaseMessage) -> Iterator[dict[str, Any]]:
+    """단일 메시지를 0개 이상의 stream_steps 이벤트로 변환.
+
+    한 AIMessage 에 tool_calls 가 여러 개면 각각 thinking 이벤트로 분리.
+    답변 AIMessage 는 answer 이벤트.
+    ToolMessage(name=search_documents) 는 tool_result 이벤트 (source_doc 포함).
+
+    Yields:
+        ``{"type": "thinking" | "tool_result" | "answer", ...}`` dict.
+    """
+    if isinstance(msg, AIMessage):
+        msg_tool_calls = getattr(msg, "tool_calls", None) or []
+        if msg_tool_calls:
+            for tc in msg_tool_calls:
+                tool_name = tc.get("name", "")
+                tool_args = tc.get("args", {}) or {}
+                yield {
+                    "type": "thinking",
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "message": f"검색 도구 호출: {tool_name}",
+                    "details": ", ".join(f'{k}="{v}"' for k, v in tool_args.items()),
+                }
+        elif msg.content:
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            if content.strip():
+                yield {"type": "answer", "content": content}
+    elif getattr(msg, "name", None) == "search_documents":
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        n_chunks = content.count("---") + 1 if content else 0
+        yield {
+            "type": "tool_result",
+            "message": f"{n_chunks}개 청크 검색 완료",
+            "source_doc": content,
+        }
 
 
 class TrackedInMemoryCache(InMemoryCache):
@@ -234,35 +318,10 @@ class AgenticRAG:
 
         final_state: dict[str, Any] = self._agent.invoke(input_state, config=config)
 
-        messages: list[BaseMessage] = final_state.get("messages", [])
-
-        final_answer: str = ""
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage) and msg.content:
-                content = msg.content
-                if isinstance(content, str) and content.strip():
-                    final_answer = content
-                    break
-
-        tool_calls: list[dict[str, Any]] = []
-        source_docs: list[str] = []
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                msg_tool_calls = getattr(msg, "tool_calls", None) or []
-                for tc in msg_tool_calls:
-                    tool_calls.append(
-                        {
-                            "tool": tc.get("name", ""),
-                            "args": tc.get("args", {}),
-                        }
-                    )
-            msg_name = getattr(msg, "name", None)
-            if msg_name == "search_documents":
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                source_docs.append(content)
+        # 메시지 파싱은 별도 헬퍼 — query/stream_steps 가 같은 추출 책임을 공유
+        parsed = parse_agent_messages(final_state.get("messages", []))
 
         elapsed = time.time() - start
-
         cache_hits = self._tracked_cache.hits if self._tracked_cache else 0
         cache_misses = self._tracked_cache.misses if self._tracked_cache else 0
         llm_calls = self._llm_tracker.llm_calls
@@ -270,12 +329,12 @@ class AgenticRAG:
         cache_hit_rate = (cache_hits / total_lookups) if total_lookups else 0.0
 
         return {
-            "final_answer": final_answer,
-            "source_documents": source_docs,
+            "final_answer": parsed.final_answer,
+            "source_documents": parsed.source_documents,
             "metadata": {
                 "pattern": self.PATTERN_NAME,
-                "tool_calls": tool_calls,
-                "tool_call_count": len(tool_calls),
+                "tool_calls": parsed.tool_calls,
+                "tool_call_count": len(parsed.tool_calls),
                 "elapsed_seconds": elapsed,
                 "cache_hits": cache_hits,
                 "cache_misses": cache_misses,
@@ -330,34 +389,25 @@ class AgenticRAG:
                         continue
                     seen_msg_ids.add(msg_id)
 
-                    if isinstance(msg, AIMessage):
-                        msg_tool_calls = getattr(msg, "tool_calls", None) or []
-                        if msg_tool_calls:
-                            for tc in msg_tool_calls:
-                                tool_name = tc.get("name", "")
-                                tool_args = tc.get("args", {})
-                                tool_calls.append({"tool": tool_name, "args": tool_args})
-                                yield {
-                                    "type": "thinking",
-                                    "message": f"검색 도구 호출: {tool_name}",
-                                    "details": ", ".join(
-                                        f'{k}="{v}"' for k, v in tool_args.items()
-                                    ),
-                                }
-                        elif msg.content:
-                            content = msg.content
-                            if isinstance(content, str) and content.strip():
-                                final_answer = content
-                                yield {"type": "answer", "content": content}
+                    # 메시지 → 이벤트 변환은 별도 헬퍼 (query() 의 파서와 책임 분리)
+                    for event in message_to_stream_events(msg):
+                        # internal 누적 — UI 표시 후 metadata에 보관
+                        if event["type"] == "thinking":
+                            tool_calls.append(
+                                {"tool": event["tool"], "args": event["args"]}
+                            )
+                        elif event["type"] == "tool_result":
+                            source_docs.append(event["source_doc"])
+                        elif event["type"] == "answer":
+                            final_answer = event["content"]
 
-                    elif getattr(msg, "name", None) == "search_documents":
-                        content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                        source_docs.append(content)
-                        n_chunks = content.count("---") + 1 if content else 0
-                        yield {
-                            "type": "tool_result",
-                            "message": f"{n_chunks}개 청크 검색 완료",
+                        # 외부 노출 이벤트 — internal 키(tool/args/source_doc)는 제거
+                        public_event = {
+                            k: v
+                            for k, v in event.items()
+                            if k not in ("tool", "args", "source_doc")
                         }
+                        yield public_event
 
         elapsed = time.time() - start
         cache_hits = self._tracked_cache.hits if self._tracked_cache else 0
