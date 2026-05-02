@@ -26,7 +26,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import health
+from api.routes import chat, health, stats
 
 app = FastAPI(
     title="Calvin RAG Chatbot API",
@@ -45,3 +45,5 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(stats.router)
+app.include_router(chat.router)
