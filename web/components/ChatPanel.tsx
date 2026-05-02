@@ -9,6 +9,7 @@ import type {
   Mode,
   ModeInfo,
 } from "@/lib/api";
+import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
 import { SourceCarousel } from "./SourceCarousel";
 
@@ -186,6 +187,14 @@ export function ChatPanel() {
                   : "bg-white border border-slate-200 mr-12",
               ].join(" ")}
             >
+              {/* 답변 헤더 meta 행 (응답시간 · 모드 · 토큰 · 신뢰도) */}
+              {isAssistant && (m.meta || m.streamMeta) && (
+                <MessageHeader
+                  mode={mode}
+                  syncMeta={m.meta}
+                  streamMeta={m.streamMeta}
+                />
+              )}
               {/* 답변 위 출처 carousel (Perplexity 스타일) */}
               {isAssistant && sources.length > 0 && (
                 <SourceCarousel sources={sources} labels={labels} />
@@ -194,17 +203,6 @@ export function ChatPanel() {
                 {m.content}
                 {m.streaming && <span className="ml-1 animate-pulse">▍</span>}
               </div>
-              {(m.meta || m.streamMeta) && (
-                <div className="mt-2 text-xs text-slate-400">
-                  응답 시간{" "}
-                  {(
-                    m.meta?.elapsed_seconds ??
-                    m.streamMeta?.elapsed_seconds ??
-                    0
-                  ).toFixed(2)}
-                  초
-                </div>
-              )}
             </div>
           );
         })}
