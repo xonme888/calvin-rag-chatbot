@@ -9,6 +9,7 @@ import type {
   Mode,
   ModeInfo,
 } from "@/lib/api";
+import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
 import { ModeSelector } from "./ModeSelector";
 import { SourceCarousel } from "./SourceCarousel";
@@ -199,10 +200,23 @@ export function ChatPanel() {
               {isAssistant && sources.length > 0 && (
                 <SourceCarousel sources={sources} labels={labels} />
               )}
-              <div className="whitespace-pre-wrap leading-relaxed">
-                {m.content}
-                {m.streaming && <span className="ml-1 animate-pulse">▍</span>}
-              </div>
+              {/* 답변 본문 — assistant 면 markdown + 인라인 [p.N] 치환 */}
+              {isAssistant ? (
+                <MarkdownAnswer
+                  content={m.content}
+                  sources={sources}
+                  labels={labels}
+                />
+              ) : (
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {m.content}
+                </div>
+              )}
+              {isAssistant && m.streaming && (
+                <span className="inline-block ml-1 animate-pulse text-slate-400">
+                  ▍
+                </span>
+              )}
             </div>
           );
         })}
