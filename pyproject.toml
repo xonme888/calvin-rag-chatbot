@@ -1,0 +1,77 @@
+[project]
+name = "calvin-rag-chatbot"
+version = "0.1.0"
+description = "칼빈 강요(Institutes of the Christian Religion) Hybrid RAG 챗봇"
+requires-python = ">=3.11"
+
+dependencies = [
+    # LangChain 1.x
+    "langchain>=1.1.0",
+    "langchain-core>=1.1.0",
+    "langchain-community>=0.4.0",
+    "langchain-openai>=1.1.0",
+    "langchain-text-splitters>=0.4.0",
+
+    # LangGraph (Hybrid 그래프 + Agentic create_agent)
+    "langgraph>=1.0.0",
+
+    # Vector store
+    "faiss-cpu>=1.8.0",
+
+    # OpenAI
+    "openai>=1.50.0",
+
+    # PDF 로딩
+    "pymupdf>=1.24",
+
+    # BM25 (한국어 토크나이저 + Hybrid 검색)
+    "rank_bm25>=0.2.2",
+
+    # Streamlit UI
+    "streamlit>=1.30",
+
+    # 환경변수/설정
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+
+    # 토큰 카운팅 (선택이나 임베딩 비용 추정용)
+    "tiktoken>=0.8.0",
+]
+
+[project.optional-dependencies]
+# Cross-encoder 재랭커 (FlashRank, 로컬 추론)
+rerank = ["flashrank>=0.2.0"]
+
+# v2: Knowledge Graph 모드 (Neo4j + 시각화)
+kg = [
+    "langchain-neo4j>=0.2.0",
+    "neo4j>=5.20",
+    "streamlit-agraph>=0.0.45",
+]
+
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+# 한 번에 다 설치
+all = [
+    "flashrank>=0.2.0",
+    "langchain-neo4j>=0.2.0",
+    "neo4j>=5.20",
+    "streamlit-agraph>=0.0.45",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# 패키지로 빌드 대상: rag_core, infra (app은 진입 스크립트라 제외)
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rag_core*", "infra*"]
+exclude = ["app*", "tests*", "data*", "indexes*", ".venv*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

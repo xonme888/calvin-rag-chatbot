@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment
+.env
+
+# 인덱스 캐시 (재생성 가능)
+indexes/
+*.faiss
+*.pkl
+
+# 데이터 (저작권 보호 — 절대 커밋 금지)
+data/
+*.pdf
+*.epub
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Streamlit
+.streamlit/secrets.toml
