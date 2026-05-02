@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from functools import lru_cache
 from typing import Annotated, Any, TypedDict
@@ -256,6 +257,8 @@ class HybridRAG:
 
         answer = response.answer
 
+        from rag_core.citation_label import labels_for_pages
+
         metadata: dict[str, Any] = {
             "pattern": self.PATTERN_NAME,
             "bm25_count": len(bm25_results),
@@ -263,6 +266,9 @@ class HybridRAG:
             "rrf_top_scores": [round(s, 4) for _, s in fused[:5]],
             "dense_weight": self.config.dense_weight,
             "source_pages": [d.metadata.get("page") for d in top_docs],
+            "source_pages_label": labels_for_pages(
+                [d.metadata.get("page") for d in top_docs]
+            ),
             "confidence": response.confidence,
             "cited_pages": response.cited_pages,
             "is_grounded": None,  # Self-RAG에서 채워짐
@@ -526,6 +532,16 @@ class HybridRAG:
                 yield text
 
         elapsed = time.time() - start
+        answer_text = "".join(full_text)
+        # 후처리 정규식 — LLM 답변에서 [p.N] 패턴을 추출해 cited_pages 채움
+        # (stream 모드는 with_structured_output 미사용이라 LLM 자체 emit 의존)
+        cited_pages = extract_cited_pages_from_text(answer_text)
+        # source_pages_label: 0-indexed page → 권/장 라벨
+        from rag_core.citation_label import labels_for_pages
+
+        source_pages_label = labels_for_pages(
+            [d.metadata.get("page") for d in top_docs]
+        )
         self._last_metadata = {
             "pattern": self.PATTERN_NAME,
             "bm25_count": len(bm25_results),
@@ -533,13 +549,32 @@ class HybridRAG:
             "rrf_top_scores": [round(s, 4) for _, s in fused[:5]],
             "dense_weight": self.config.dense_weight,
             "source_pages": [d.metadata.get("page") for d in top_docs],
+            "source_pages_label": source_pages_label,
             "source_documents": [d.page_content for d in top_docs],
             "elapsed_seconds": elapsed,
-            "answer_full": "".join(full_text),
+            "answer_full": answer_text,
             "confidence": None,
-            "cited_pages": [],
+            "cited_pages": cited_pages,
             "is_grounded": None,
         }
+
+
+_CITED_PAGE_PATTERN = re.compile(r"\[p\.(\d+)\]")
+
+
+def extract_cited_pages_from_text(text: str) -> list[int]:
+    """답변 텍스트에서 ``[p.N]`` 패턴을 추출해 1-indexed page 리스트 반환.
+
+    중복 제거 (LLM 이 같은 페이지를 여러 번 인용하는 경우) + 등장 순서 보존.
+    """
+    seen: set[int] = set()
+    out: list[int] = []
+    for match in _CITED_PAGE_PATTERN.finditer(text):
+        page = int(match.group(1))
+        if page not in seen:
+            seen.add(page)
+            out.append(page)
+    return out
 
 
 def _format_doc_with_meta(doc: Document) -> str:

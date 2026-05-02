@@ -209,7 +209,11 @@ async def _stream_chat_events(req: ChatRequest):
 
 
 async def _stream_hybrid(req: ChatRequest):
-    """Hybrid stream_query 를 async 변환해 토큰 단위 SSE."""
+    """Hybrid stream_query 를 async 변환해 토큰 단위 SSE.
+
+    Stream 종료 후 ``event: meta`` 1회 emit — cited_pages, source_pages_label,
+    elapsed, confidence, tokens 등 메타데이터 클라이언트 전달.
+    """
     hybrid = get_hybrid_rag()
     hybrid.config.dense_weight = req.dense_weight
     history = _to_langchain_history(req.chat_history)
@@ -238,6 +242,28 @@ async def _stream_hybrid(req: ChatRequest):
             "event": "message",
             "data": json.dumps({"type": "text-delta", "delta": chunk}, ensure_ascii=False),
         }
+
+    # Stream 종료 후 — _last_metadata 가 채워져 있으므로 meta 이벤트 1회 emit
+    last_meta = hybrid._last_metadata or {}
+    mode_stats = stats.by_mode.get("Hybrid")
+    meta_payload = {
+        "cited_pages": last_meta.get("cited_pages", []),
+        "source_documents": last_meta.get("source_documents", []),
+        "source_pages": last_meta.get("source_pages", []),
+        "source_pages_label": last_meta.get("source_pages_label", []),
+        "elapsed_seconds": last_meta.get("elapsed_seconds"),
+        "confidence": last_meta.get("confidence"),
+        "pattern": last_meta.get("pattern", "Hybrid RAG"),
+        "mode": "hybrid",
+        "tokens": {
+            "input": mode_stats.input_tokens if mode_stats else 0,
+            "output": mode_stats.output_tokens if mode_stats else 0,
+        },
+    }
+    yield {
+        "event": "meta",
+        "data": json.dumps(meta_payload, ensure_ascii=False, default=str),
+    }
 
 
 async def _stream_sync_replay(req: ChatRequest):

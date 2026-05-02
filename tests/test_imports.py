@@ -35,6 +35,7 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "rag_core.guardrail.openai_moderation_adapter",
     "rag_core.guardrail.chain",
     "rag_core.guardrail.factory",
+    "rag_core.citation_label",
     # rag_core.kg 서브패키지
     "rag_core.kg",
     "rag_core.kg.port",
