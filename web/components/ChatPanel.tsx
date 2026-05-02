@@ -18,6 +18,8 @@ import { ModeSelector } from "./ModeSelector";
 import { SourceCarousel } from "./SourceCarousel";
 import { SourcePreviewDrawer } from "./SourcePreviewDrawer";
 import type { SourceItem } from "./SourcePreviewDrawer";
+import { SubgraphView } from "./SubgraphView";
+import type { SubgraphData } from "./SubgraphView";
 import { SuggestedPrompts } from "./SuggestedPrompts";
 
 interface UIMessage {
@@ -57,6 +59,13 @@ function extractFollowups(msg: UIMessage): string[] {
 
 function isAssistant(msg: UIMessage): boolean {
   return msg.role === "assistant";
+}
+
+// KG 모드 응답에서 부분 그래프 추출 (sync 응답에만 존재)
+function extractSubgraph(msg: UIMessage): SubgraphData | null {
+  const sg = msg.meta?.metadata.subgraph as SubgraphData | undefined;
+  if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
+  return sg;
 }
 
 export function ChatPanel() {
@@ -270,6 +279,11 @@ export function ChatPanel() {
                   onCardClick={handleCardClick}
                 />
               )}
+              {/* KG 모드: 부분 그래프 시각화 (force-directed) */}
+              {isAssistantMsg && (() => {
+                const sg = extractSubgraph(m);
+                return sg ? <SubgraphView subgraph={sg} /> : null;
+              })()}
               {/* 답변 본문 — assistant 면 markdown + 인라인 [p.N] 치환 */}
               {isAssistantMsg ? (
                 <MarkdownAnswer
