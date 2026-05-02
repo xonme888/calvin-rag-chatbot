@@ -1,0 +1,38 @@
+# 로컬 개발용 Neo4j 컨테이너.
+#
+# 시작:  docker compose up -d
+# 종료:  docker compose down  (데이터 영속, volume 보존)
+# 초기화: docker compose down -v  (volume까지 삭제)
+#
+# Neo4j Browser: http://localhost:7474  (로그인: neo4j / password)
+# Bolt URI:      bolt://localhost:7687
+#
+# Neo4j Aura(클라우드)로 전환 시 .env의 NEO4J_URI 만 neo4j+s:// 로 변경.
+# 코드는 동일 어댑터 사용.
+
+services:
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: neo4j-calvin
+    ports:
+      - "7474:7474"   # HTTP / Browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    environment:
+      NEO4J_AUTH: neo4j/password
+      # APOC 플러그인 (LLMGraphTransformer가 활용)
+      NEO4J_PLUGINS: '["apoc"]'
+      # APOC 절차 허용 (트리플 로드 시 필요)
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  neo4j-data:
+  neo4j-logs:

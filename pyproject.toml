@@ -46,6 +46,7 @@ rerank = ["flashrank>=0.2.0"]
 # v2: Knowledge Graph 모드 (Neo4j + 시각화)
 kg = [
     "langchain-neo4j>=0.2.0",
+    "langchain-experimental>=0.3.0",   # LLMGraphTransformer
     "neo4j>=5.20",
     "streamlit-agraph>=0.0.45",
 ]
@@ -56,6 +57,7 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 all = [
     "flashrank>=0.2.0",
     "langchain-neo4j>=0.2.0",
+    "langchain-experimental>=0.3.0",
     "neo4j>=5.20",
     "streamlit-agraph>=0.0.45",
     "pytest>=8.0",
