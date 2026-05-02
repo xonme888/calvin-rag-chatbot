@@ -148,6 +148,34 @@ def get_kg_rag():
     return KnowledgeGraphRAG(kg_adapter=adapter, hybrid_rag=get_hybrid_rag())
 
 
+@st.cache_data(ttl=30)
+def _check_kg_available() -> tuple[bool, str | None]:
+    """KG 모드 사용 가능 여부와 미가용 사유 반환 (30초 캐시).
+
+    docker 재시작 / .env 변경 후 30초 안에 자동 감지.
+    Hybrid/Agentic 모드는 이 결과와 무관하게 항상 사용 가능.
+
+    Returns:
+        (available, reason). available=False 면 사이드바에서 KG 옵션 숨김.
+    """
+    try:
+        from rag_core.kg.factory import get_kg_adapter
+    except ImportError:
+        return False, "KG 의존성 미설치 — `uv pip install -e '.[kg]'`"
+
+    try:
+        adapter = get_kg_adapter()
+        if not adapter.health_check():
+            return False, "Neo4j 미연결 — `docker compose up -d`"
+        # 그래프가 비어 있으면 인덱싱 안내
+        stats = adapter.stats()
+        if stats.get("nodes", 0) == 0:
+            return False, "Neo4j 그래프 비어 있음 — `python scripts/index_kg.py --balanced 30`"
+        return True, None
+    except Exception as e:  # noqa: BLE001
+        return False, f"{type(e).__name__}: {str(e)[:80]}"
+
+
 def _render_kg_meta(
     metadata: dict[str, Any],
     source_documents: list[str],
@@ -222,9 +250,15 @@ def _render_kg_meta(
 with st.sidebar:
     st.title("설정")
 
+    # KG 가용성 확인 (30초 캐시) — 미가용 시 모드 옵션에서 자동 제외
+    kg_available, kg_reason = _check_kg_available()
+    mode_options = ["Hybrid", "Agentic"]
+    if kg_available:
+        mode_options.append("Knowledge Graph")
+
     mode = st.radio(
         "모드",
-        options=["Hybrid", "Agentic", "Knowledge Graph"],
+        options=mode_options,
         index=0,
         help=(
             "Hybrid: 정해진 흐름 (retrieve → generate). 빠르고 저렴. 토큰 스트리밍.\n"
@@ -232,6 +266,13 @@ with st.sidebar:
             "Knowledge Graph: Cypher + 벡터 결합. 인물/개념 관계 그래프 시각화."
         ),
     )
+
+    if not kg_available and kg_reason:
+        st.info(
+            f"**KG 모드 비활성화** — {kg_reason}\n\n"
+            "Hybrid/Agentic은 영향 없이 사용 가능합니다. "
+            "복구 후 사이드바를 새로고침하면 KG 모드가 자동으로 나타납니다."
+        )
 
     if mode == "Hybrid":
         dense_weight = st.slider(
