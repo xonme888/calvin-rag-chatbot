@@ -30,7 +30,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.middleware.rate_limiter import limiter
-from api.routes import chat, health, stats
+from api.routes import chat, health, stats, title
 
 app = FastAPI(
     title="Calvin RAG Chatbot API",
@@ -64,3 +64,4 @@ async def _rate_limit_exceeded_handler(request, exc):  # type: ignore[no-untyped
 app.include_router(health.router)
 app.include_router(stats.router)
 app.include_router(chat.router)
+app.include_router(title.router)

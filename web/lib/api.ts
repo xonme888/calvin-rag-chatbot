@@ -76,6 +76,28 @@ export interface ModeInfo {
   reason: string | null;
 }
 
+/**
+ * 첫 답변 종료 후 cheap LLM 으로 짧은 세션 제목 생성.
+ * 실패 시 빈 문자열 — 호출측은 deriveTitle 폴백.
+ */
+export async function generateAutoTitle(
+  question: string,
+  answer: string,
+): Promise<string> {
+  try {
+    const r = await fetch(`${API_BASE}/title`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, answer: answer.slice(0, 8000) }),
+    });
+    if (!r.ok) return "";
+    const j = (await r.json()) as { title?: string };
+    return (j.title ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function fetchModes(): Promise<ModeInfo[]> {
   const r = await fetch(`${API_BASE}/modes`, { cache: "no-store" });
   if (!r.ok) throw new Error(`/modes ${r.status}`);

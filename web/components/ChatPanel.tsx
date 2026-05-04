@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
-import { chatStream, chatSync, fetchModes } from "@/lib/api";
+import { chatStream, chatSync, fetchModes, generateAutoTitle } from "@/lib/api";
 import type { ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
 import { messageToBlocks } from "@/lib/blocks";
 import {
@@ -112,6 +112,9 @@ export function ChatPanel({
     const previousMode = opts?.previousMode ?? null;
     markPending(startedSessionId, true);
 
+    // 첫 답변 여부 — 자동 제목 LLM 호출 트리거 (재시도일 때는 false)
+    const isFirstAnswer = session.messages.length === 0;
+
     let next: SessionMessage[] = [
       ...session.messages,
       { role: "user", content: question },
@@ -195,6 +198,19 @@ export function ChatPanel({
       });
     } finally {
       markPending(startedSessionId, false);
+    }
+
+    // 첫 답변 시점에 자동 제목 LLM (비차단, 실패 시 무시)
+    const finalAnswer = next[next.length - 1]?.content ?? "";
+    if (
+      isFirstAnswer &&
+      finalAnswer &&
+      !finalAnswer.startsWith("오류:") &&
+      !finalAnswer.startsWith("(빈 응답")
+    ) {
+      void generateAutoTitle(question, finalAnswer).then((title) => {
+        if (title) onUpdateById(startedSessionId, { title });
+      });
     }
   }
 
