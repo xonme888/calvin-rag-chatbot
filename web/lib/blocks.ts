@@ -1,0 +1,154 @@
+/**
+ * 메시지 → Block 분해. ChatPanel 의 if 분기를 외부화한다.
+ *
+ * 의도: 새 결과 타입 (이미지 / 도구 trace / 차트 / MCP 결과 등) 이 추가될 때
+ * ChatPanel 을 건드리지 않고 Block 타입과 Renderer 한 쌍만 등록하면 끝나도록.
+ *
+ * 향후 확장 예시:
+ * - { type: "image"; url; alt }
+ * - { type: "tool_call_trace"; calls: [...] }
+ * - { type: "chart"; spec: VegaSpec }
+ */
+
+import type { CitationLabel } from "./api";
+import type { SessionMessage } from "./sessionStore";
+
+// SubgraphData 는 컴포넌트 쪽에서 정의 — 순환 import 방지로 inline 재선언
+interface SubgraphNode {
+  id: string;
+  label: string;
+  type?: string;
+  properties?: Record<string, unknown>;
+}
+interface SubgraphEdge {
+  source: string;
+  target: string;
+  label?: string;
+  properties?: Record<string, unknown>;
+}
+interface SubgraphPayload {
+  nodes: SubgraphNode[];
+  edges: SubgraphEdge[];
+}
+
+// ====================================================================
+// Block 타입 — 새 종류 추가 시 여기에 한 줄, RENDERERS 에 한 줄.
+// ====================================================================
+export type Block =
+  | { type: "text"; content: string; streaming?: boolean }
+  | { type: "user_text"; content: string }
+  | { type: "header"; mode: string | null; routedMode: string | null; autoRouted: boolean }
+  | {
+      type: "citations";
+      sources: string[];
+      labels: Array<CitationLabel | null>;
+    }
+  | { type: "subgraph"; data: SubgraphPayload }
+  | { type: "followups"; questions: string[] };
+
+// ====================================================================
+// 메시지 → Block[] 어댑터.
+// SessionMessage 구조는 그대로 유지하고 화면 분해만 수행 (백엔드 호환).
+// ====================================================================
+
+interface ToBlocksOpts {
+  /** 마지막 assistant 메시지인가 — followups 노출 여부에 사용. */
+  isLastAssistant: boolean;
+}
+
+function extractSources(msg: SessionMessage): {
+  sources: string[];
+  labels: Array<CitationLabel | null>;
+} {
+  if (msg.streamMeta) {
+    return {
+      sources: msg.streamMeta.source_documents,
+      labels: msg.streamMeta.source_pages_label,
+    };
+  }
+  if (msg.meta) {
+    const labels =
+      (msg.meta.metadata.source_pages_label as Array<CitationLabel | null>) ??
+      [];
+    return { sources: msg.meta.source_documents, labels };
+  }
+  return { sources: [], labels: [] };
+}
+
+function extractFollowups(msg: SessionMessage): string[] {
+  const candidate =
+    msg.streamMeta?.suggested_followups ??
+    (msg.meta?.metadata.suggested_followups as string[] | undefined);
+  return Array.isArray(candidate)
+    ? candidate.filter((q) => typeof q === "string")
+    : [];
+}
+
+function extractSubgraph(msg: SessionMessage): SubgraphPayload | null {
+  const sg = msg.meta?.metadata.subgraph as SubgraphPayload | undefined;
+  if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
+  return sg;
+}
+
+function extractRoutedMode(msg: SessionMessage): {
+  routedMode: string | null;
+  autoRouted: boolean;
+} {
+  const routed =
+    (msg.meta?.metadata.routed_mode as string | undefined) ??
+    msg.streamMeta?.routed_mode ??
+    null;
+  const auto =
+    (msg.meta?.metadata.auto_routed as boolean | undefined) ??
+    msg.streamMeta?.auto_routed ??
+    false;
+  return { routedMode: routed, autoRouted: auto };
+}
+
+export function messageToBlocks(
+  msg: SessionMessage,
+  opts: ToBlocksOpts,
+): Block[] {
+  if (msg.role === "user") {
+    return [{ type: "user_text", content: msg.content }];
+  }
+
+  const out: Block[] = [];
+
+  // 헤더: meta 있을 때만
+  if (msg.meta || msg.streamMeta) {
+    const { routedMode, autoRouted } = extractRoutedMode(msg);
+    const mode =
+      (msg.meta?.metadata.pattern as string | undefined) ??
+      msg.streamMeta?.pattern ??
+      null;
+    out.push({ type: "header", mode, routedMode, autoRouted });
+  }
+
+  // 출처 carousel
+  const { sources, labels } = extractSources(msg);
+  if (sources.length > 0) {
+    out.push({ type: "citations", sources, labels });
+  }
+
+  // KG subgraph
+  const sg = extractSubgraph(msg);
+  if (sg) {
+    out.push({ type: "subgraph", data: sg });
+  }
+
+  // 본문 (markdown)
+  out.push({ type: "text", content: msg.content, streaming: msg.streaming });
+
+  // 후속 질문 — 마지막 답변에만, 진행 중 X
+  const followups = extractFollowups(msg);
+  if (
+    opts.isLastAssistant &&
+    !msg.streaming &&
+    followups.length > 0
+  ) {
+    out.push({ type: "followups", questions: followups });
+  }
+
+  return out;
+}

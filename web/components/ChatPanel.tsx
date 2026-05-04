@@ -3,52 +3,34 @@
 import { useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes } from "@/lib/api";
-import type {
-  CitationLabel,
-  ChatStreamMeta,
-  Mode,
-  ModeInfo,
-} from "@/lib/api";
+import type { ChatStreamMeta, Mode, ModeInfo } from "@/lib/api";
+import { messageToBlocks } from "@/lib/blocks";
 import {
   deriveTitle,
   type ChatSession,
   type SessionMessage,
 } from "@/lib/sessionStore";
 import { AboutModal } from "./AboutModal";
-import { FollowupChips } from "./FollowupChips";
-import { MarkdownAnswer } from "./MarkdownAnswer";
-import { MessageHeader } from "./MessageHeader";
+import { renderBlock, type BlockContext } from "./blockRenderers";
 import { ModeSelector } from "./ModeSelector";
-import { SourceCarousel } from "./SourceCarousel";
 import { SourcePreviewDrawer } from "./SourcePreviewDrawer";
 import type { SourceItem } from "./SourcePreviewDrawer";
-import { SubgraphView } from "./SubgraphView";
-import type { SubgraphData } from "./SubgraphView";
-import { SuggestedPrompts } from "./SuggestedPrompts";
 
 interface ChatPanelProps {
   session: ChatSession;
   onUpdate: (
     patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
   ) => void;
-  /**
-   * 백그라운드 답변용 — 시작 시점의 sessionId 로 commit 한다.
-   * 이걸 써야 사용자가 다른 세션 둘러봐도 원래 세션에 답변이 도착한다.
-   */
   onUpdateById: (
     id: string,
     patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
   ) => void;
-  /** 현재 active session 이 응답 진행 중인지. */
   isPending: boolean;
-  /** 진행 시작/종료 표시용 — 사이드바 dot 인디케이터 갱신. */
   markPending: (id: string, pending: boolean) => void;
 }
 
-function extractSources(msg: SessionMessage): {
-  sources: string[];
-  labels: Array<CitationLabel | null>;
-} {
+// 메시지 sources/labels 를 한 번 추출 (drawer + Block context 공용)
+function getSourcesFromMessage(msg: SessionMessage) {
   if (msg.streamMeta) {
     return {
       sources: msg.streamMeta.source_documents,
@@ -57,30 +39,12 @@ function extractSources(msg: SessionMessage): {
   }
   if (msg.meta) {
     const labels =
-      (msg.meta.metadata.source_pages_label as Array<CitationLabel | null>) ??
-      [];
+      (msg.meta.metadata.source_pages_label as
+        | BlockContext["labels"]
+        | undefined) ?? [];
     return { sources: msg.meta.source_documents, labels };
   }
-  return { sources: [], labels: [] };
-}
-
-function extractFollowups(msg: SessionMessage): string[] {
-  const candidate =
-    msg.streamMeta?.suggested_followups ??
-    (msg.meta?.metadata.suggested_followups as string[] | undefined);
-  return Array.isArray(candidate)
-    ? candidate.filter((q) => typeof q === "string")
-    : [];
-}
-
-function isAssistant(msg: SessionMessage): boolean {
-  return msg.role === "assistant";
-}
-
-function extractSubgraph(msg: SessionMessage): SubgraphData | null {
-  const sg = msg.meta?.metadata.subgraph as SubgraphData | undefined;
-  if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
-  return sg;
+  return { sources: [] as string[], labels: [] as BlockContext["labels"] };
 }
 
 export function ChatPanel({
@@ -91,11 +55,10 @@ export function ChatPanel({
   markPending,
 }: ChatPanelProps) {
   const [modes, setModes] = useState<ModeInfo[]>([]);
-  // session.messages 가 단일 진실 소스 — local mirror 두지 않음
-  const messages = session.messages;
+  const messages = session.messages; // session 이 단일 진실 소스
   const [mode, setModeLocal] = useState<Mode>(session.mode);
   const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null); // mode 로딩 등 oneshot 에러
+  const [error, setError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [drawer, setDrawer] = useState<{
     items: SourceItem[];
@@ -103,14 +66,12 @@ export function ChatPanel({
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 모드 목록 로드 (1회)
   useEffect(() => {
     fetchModes()
       .then(setModes)
       .catch((e) => setError(`/modes 로드 실패: ${e.message}`));
   }, []);
 
-  // 세션 전환 시 입력/draft/drawer 만 reset (진행 중 답변은 abort 하지 않음)
   useEffect(() => {
     setModeLocal(session.mode);
     setInput("");
@@ -118,7 +79,6 @@ export function ChatPanel({
     setDrawer(null);
   }, [session.id, session.mode]);
 
-  // messages 변화 시 자동 스크롤
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -144,7 +104,6 @@ export function ChatPanel({
     if (isPending) return;
     setError(null);
 
-    // 시작 시점의 sessionId 캡처 — 도중에 active 가 바뀌어도 이 값으로 commit
     const startedSessionId = session.id;
     const startMode = mode;
     markPending(startedSessionId, true);
@@ -161,7 +120,9 @@ export function ChatPanel({
     });
 
     try {
-      if (startMode === "hybrid") {
+      if (startMode === "hybrid" || startMode === "auto") {
+        // auto/hybrid 는 SSE 스트리밍 시도. 백엔드 라우터가 다른 모드로
+        // 결정하면 sync replay 로 자연스럽게 처리됨.
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
         for await (const chunk of chatStream({ question, mode: startMode })) {
@@ -206,7 +167,6 @@ export function ChatPanel({
         });
       }
     } catch (err: unknown) {
-      // AbortError 는 거의 일어나지 않지만 안전 차원에서 처리
       if (err instanceof DOMException && err.name === "AbortError") return;
       const errMsg = err instanceof Error ? err.message : String(err);
       next = [
@@ -259,14 +219,13 @@ export function ChatPanel({
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
-          <SuggestedPrompts onPick={sendQuestion} disabled={isPending} />
+          <SuggestedPromptsLazy onPick={sendQuestion} disabled={isPending} />
         )}
         {messages.map((m, i) => {
-          const { sources, labels } = extractSources(m);
-          const followups = isAssistant(m) ? extractFollowups(m) : [];
-          const isLastAssistant =
-            m.role === "assistant" && i === messages.length - 1 && !m.streaming;
           const isAssistantMsg = m.role === "assistant";
+          const isLastAssistant =
+            isAssistantMsg && i === messages.length - 1 && !m.streaming;
+          const { sources, labels } = getSourcesFromMessage(m);
 
           const buildItems = (): SourceItem[] =>
             sources.map((content, idx) => ({
@@ -275,20 +234,26 @@ export function ChatPanel({
               content,
             }));
 
-          const handleCitationClick = (page: number) => {
-            let hi: number | undefined;
-            for (let k = 0; k < labels.length; k++) {
-              if (labels[k]?.page === page) {
-                hi = k + 1;
-                break;
+          const ctx: BlockContext = {
+            sources,
+            labels,
+            onCardClick: (index1Based) =>
+              setDrawer({ items: buildItems(), highlightedIndex: index1Based }),
+            onCitationClick: (page) => {
+              let hi: number | undefined;
+              for (let k = 0; k < labels.length; k++) {
+                if (labels[k]?.page === page) {
+                  hi = k + 1;
+                  break;
+                }
               }
-            }
-            setDrawer({ items: buildItems(), highlightedIndex: hi });
+              setDrawer({ items: buildItems(), highlightedIndex: hi });
+            },
+            onFollowupPick: sendQuestion,
+            pendingFollowup: isPending,
           };
 
-          const handleCardClick = (index1Based: number) => {
-            setDrawer({ items: buildItems(), highlightedIndex: index1Based });
-          };
+          const blocks = messageToBlocks(m, { isLastAssistant });
 
           return (
             <div
@@ -300,49 +265,9 @@ export function ChatPanel({
                   : "bg-white border border-slate-200 mr-12",
               ].join(" ")}
             >
-              {isAssistantMsg && (m.meta || m.streamMeta) && (
-                <MessageHeader
-                  mode={mode}
-                  syncMeta={m.meta}
-                  streamMeta={m.streamMeta}
-                />
-              )}
-              {isAssistantMsg && sources.length > 0 && (
-                <SourceCarousel
-                  sources={sources}
-                  labels={labels}
-                  onCardClick={handleCardClick}
-                />
-              )}
-              {isAssistantMsg &&
-                (() => {
-                  const sg = extractSubgraph(m);
-                  return sg ? <SubgraphView subgraph={sg} /> : null;
-                })()}
-              {isAssistantMsg ? (
-                <MarkdownAnswer
-                  content={m.content}
-                  sources={sources}
-                  labels={labels}
-                  onCitationClick={handleCitationClick}
-                />
-              ) : (
-                <div className="whitespace-pre-wrap leading-relaxed">
-                  {m.content}
-                </div>
-              )}
-              {isAssistantMsg && m.streaming && (
-                <span className="inline-block ml-1 animate-pulse text-slate-400">
-                  ▍
-                </span>
-              )}
-              {isLastAssistant && followups.length > 0 && (
-                <FollowupChips
-                  questions={followups}
-                  onPick={sendQuestion}
-                  disabled={isPending}
-                />
-              )}
+              {blocks.map((b, bi) => (
+                <div key={bi}>{renderBlock(b, ctx)}</div>
+              ))}
             </div>
           );
         })}
@@ -378,3 +303,6 @@ export function ChatPanel({
     </div>
   );
 }
+
+// SuggestedPrompts 는 빈 상태에서만 노출 — 별도 import (default lazy 불필요, alias)
+import { SuggestedPrompts as SuggestedPromptsLazy } from "./SuggestedPrompts";
