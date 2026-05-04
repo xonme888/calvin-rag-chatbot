@@ -27,6 +27,7 @@ from api.middleware.audit_log import AuditRecord, log_chat
 from api.middleware.rate_limiter import limiter
 from api.middleware.token_budget import check_token_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
+from infra.circuit_breaker import CircuitOpenError, get_breaker
 from infra.observability import (
     LangChainTracer,
     new_trace_id,
@@ -105,12 +106,23 @@ def _invoke_sync(
     if trace_id:
         callbacks.append(LangChainTracer(trace_id))
 
-    # hybrid 만 chat_history/dense_weight 옵션 지원 — capability 차이
-    if req.mode == "hybrid":
-        rag.config.dense_weight = req.dense_weight
-        history = _to_langchain_history(req.chat_history)
-        return rag.query(req.question, chat_history=history, callbacks=callbacks)
-    return rag.query(req.question, callbacks=callbacks)
+    # 회로 차단 — 연속 5회 실패 시 30초 차단 (PRD-4)
+    breaker = get_breaker(f"mode:{req.mode}", failure_threshold=5, reset_timeout=30.0)
+    try:
+        # hybrid 만 chat_history/dense_weight 옵션 지원 — capability 차이
+        if req.mode == "hybrid":
+            rag.config.dense_weight = req.dense_weight
+            history = _to_langchain_history(req.chat_history)
+            return breaker.call(
+                rag.query, req.question, chat_history=history, callbacks=callbacks
+            )
+        return breaker.call(rag.query, req.question, callbacks=callbacks)
+    except CircuitOpenError as e:
+        trace_event("circuit.open", mode=req.mode, message=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail=f"{entry.label} 일시 차단 — 30초 후 자동 복구 시도",
+        )
 
 
 @router.post("/sync", response_model=ChatSyncResponse)

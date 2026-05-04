@@ -109,6 +109,9 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
     """챗 요청 audit log 기록 — 동기 함수 (BackgroundTasks 안에서 호출)."""
     path = db_path or _resolve_db_path()
     _ensure_schema(path)
+    # PII redaction — 저장 전 question/answer_preview 마스킹 (PRD-5)
+    from infra.pii_redactor import redact
+
     with _connect(path) as conn:
         conn.execute(
             "INSERT INTO audit_log "
@@ -122,8 +125,8 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
                 record.timestamp,
                 record.ip,
                 record.mode,
-                record.question[:500],  # 길이 제한
-                record.answer_preview[:500],
+                redact(record.question)[:500],
+                redact(record.answer_preview)[:500],
                 record.tokens_in,
                 record.tokens_out,
                 record.cost_krw,

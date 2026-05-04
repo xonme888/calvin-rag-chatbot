@@ -48,11 +48,22 @@ def _emit(payload: dict[str, Any]) -> None:
 
     - 기본: stdout JSON line
     - 환경변수 ``LOG_SINK=loki|cloudwatch|noop`` 로 swap
+    - 텍스트 필드는 PII redactor 통과 (PRD-5)
     """
     payload.setdefault("ts", time.time())
     tid = get_current_trace_id()
     if tid:
         payload.setdefault("trace_id", tid)
+    # 사용자 텍스트가 trace 에 평문으로 남지 않게 — 알려진 텍스트 키만 redact
+    try:
+        from infra.pii_redactor import redact
+
+        for key in ("question_preview", "prompt_preview", "input_preview", "output_preview"):
+            v = payload.get(key)
+            if isinstance(v, str):
+                payload[key] = redact(v)
+    except Exception:  # noqa: BLE001
+        pass
     _sink_emit(payload)
 
 
