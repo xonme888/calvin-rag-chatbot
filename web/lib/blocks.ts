@@ -44,6 +44,10 @@ export type Block =
       labels: Array<CitationLabel | null>;
     }
   | { type: "subgraph"; data: SubgraphPayload }
+  | {
+      type: "tool_trace";
+      calls: Array<{ tool: string; args?: Record<string, unknown> }>;
+    }
   | { type: "followups"; questions: string[] }
   | { type: "retry_menu"; previousQuestion: string; currentMode: RagMode | null };
 
@@ -96,6 +100,34 @@ function extractSubgraph(msg: SessionMessage): SubgraphPayload | null {
   return sg;
 }
 
+interface ParsedToolCall {
+  tool: string;
+  args?: Record<string, unknown>;
+}
+
+function extractToolCalls(msg: SessionMessage): ParsedToolCall[] {
+  const raw =
+    msg.streamMeta?.tool_calls ??
+    (msg.meta?.metadata.tool_calls as
+      | Array<Record<string, unknown>>
+      | undefined);
+  if (!Array.isArray(raw)) return [];
+  const out: ParsedToolCall[] = [];
+  for (const c of raw) {
+    const tool = (c as Record<string, unknown>).tool;
+    if (typeof tool !== "string") continue;
+    const args = (c as Record<string, unknown>).args;
+    out.push({
+      tool,
+      args:
+        args && typeof args === "object"
+          ? (args as Record<string, unknown>)
+          : undefined,
+    });
+  }
+  return out;
+}
+
 function extractRoutedMode(msg: SessionMessage): {
   routedMode: string | null;
   autoRouted: boolean;
@@ -141,6 +173,12 @@ export function messageToBlocks(
   const sg = extractSubgraph(msg);
   if (sg) {
     out.push({ type: "subgraph", data: sg });
+  }
+
+  // Agentic tool 호출 trace (도구 0회면 안 보임)
+  const calls = extractToolCalls(msg);
+  if (calls.length > 0) {
+    out.push({ type: "tool_trace", calls });
   }
 
   // 본문 (markdown)

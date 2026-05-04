@@ -17,6 +17,7 @@ import { RetryWithModeMenu } from "./RetryWithModeMenu";
 import { SourceCarousel } from "./SourceCarousel";
 import { SubgraphView } from "./SubgraphView";
 import type { SubgraphData } from "./SubgraphView";
+import { ToolTraceView } from "./ToolTraceView";
 
 // 렌더 시점에 메시지 단위로 주입되는 컨텍스트 (이벤트 콜백 + 공유 state)
 export interface BlockContext {
@@ -71,6 +72,8 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
   subgraph: (block) => (
     <SubgraphView subgraph={block.data as SubgraphData} />
   ),
+
+  tool_trace: (block) => <ToolTraceView calls={block.calls} />,
 
   text: (block, ctx) => (
     <>
