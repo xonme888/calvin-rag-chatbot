@@ -8,10 +8,11 @@ interface Props {
   streamMeta?: ChatStreamMeta;
 }
 
-const MODE_LABEL: Record<Mode, string> = {
+const MODE_LABEL: Record<string, string> = {
   hybrid: "Hybrid",
   agentic: "Agentic",
   kg: "Knowledge Graph",
+  auto: "자동",
 };
 
 /**
@@ -28,10 +29,25 @@ export function MessageHeader({ mode, syncMeta, streamMeta }: Props) {
     null;
   const tokensIn = streamMeta?.tokens?.input ?? null;
   const tokensOut = streamMeta?.tokens?.output ?? null;
-  const pattern =
-    (syncMeta?.metadata.pattern as string | undefined) ??
-    streamMeta?.pattern ??
-    (mode ? MODE_LABEL[mode] : null);
+  // 라우터 결과 우선 — 사용자에게는 실제로 호출된 모드를 보여준다
+  const routedMode =
+    (syncMeta?.metadata.routed_mode as string | undefined) ??
+    streamMeta?.routed_mode ??
+    null;
+  const autoRouted =
+    (syncMeta?.metadata.auto_routed as boolean | undefined) ??
+    streamMeta?.auto_routed ??
+    false;
+
+  const baseMode =
+    routedMode ?? (mode && mode !== "auto" ? mode : null);
+  const pattern = baseMode
+    ? autoRouted
+      ? `자동 → ${MODE_LABEL[baseMode] ?? baseMode}`
+      : MODE_LABEL[baseMode] ?? baseMode
+    : (syncMeta?.metadata.pattern as string | undefined) ??
+      streamMeta?.pattern ??
+      null;
 
   // sync 응답에서 cached_hits 등 (Agentic mode 메타)
   const toolCallCount =

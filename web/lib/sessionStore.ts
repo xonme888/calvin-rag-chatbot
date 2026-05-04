@@ -55,7 +55,7 @@ function generateId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function newSession(mode: Mode = "hybrid"): ChatSession {
+export function newSession(mode: Mode = "auto"): ChatSession {
   const now = Date.now();
   return {
     id: generateId(),
@@ -137,7 +137,7 @@ export function useSessions(): UseSessionsResult {
 
   const active = sessions.find((s) => s.id === activeId) ?? null;
 
-  const createNew = useCallback((mode: Mode = "hybrid"): string => {
+  const createNew = useCallback((mode: Mode = "auto"): string => {
     const fresh = newSession(mode);
     setSessions((prev) => [fresh, ...prev]);
     setActiveId(fresh.id);

@@ -4,7 +4,10 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
-export type Mode = "hybrid" | "agentic" | "kg";
+// 실제 백엔드 RAG 모드
+export type RagMode = "hybrid" | "agentic" | "kg";
+// 클라이언트가 보낼 수 있는 값 — "auto" 면 백엔드 라우터가 결정
+export type Mode = "auto" | RagMode;
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -37,7 +40,9 @@ export interface ChatStreamMeta {
   elapsed_seconds: number | null;
   confidence: number | null;
   pattern: string;
-  mode: Mode;
+  mode: RagMode;
+  routed_mode?: RagMode; // 라우터가 실제로 호출한 모드
+  auto_routed?: boolean;
   tokens: { input: number; output: number };
   suggested_followups?: string[];
 }
@@ -50,7 +55,7 @@ export interface ChatSyncResponse {
 }
 
 export interface ModeInfo {
-  name: Mode;
+  name: Mode; // "auto" 또는 RagMode 가능 (auto 는 프론트가 가상 추가)
   label: string;
   available: boolean;
   reason: string | null;

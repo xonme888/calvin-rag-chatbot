@@ -24,7 +24,7 @@ export default function HomePage() {
         activeId={session.activeId}
         pendingIds={session.pendingIds}
         onSelect={session.setActive}
-        onNew={() => session.createNew(session.active?.mode ?? "hybrid")}
+        onNew={() => session.createNew("auto")}
         onDelete={session.remove}
       />
       <ChatPanel
