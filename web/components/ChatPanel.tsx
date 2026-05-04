@@ -31,9 +31,20 @@ interface ChatPanelProps {
   onUpdate: (
     patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
   ) => void;
+  /**
+   * 백그라운드 답변용 — 시작 시점의 sessionId 로 commit 한다.
+   * 이걸 써야 사용자가 다른 세션 둘러봐도 원래 세션에 답변이 도착한다.
+   */
+  onUpdateById: (
+    id: string,
+    patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
+  ) => void;
+  /** 현재 active session 이 응답 진행 중인지. */
+  isPending: boolean;
+  /** 진행 시작/종료 표시용 — 사이드바 dot 인디케이터 갱신. */
+  markPending: (id: string, pending: boolean) => void;
 }
 
-// sync 응답 또는 stream meta 에서 출처 정보 통합 추출
 function extractSources(msg: SessionMessage): {
   sources: string[];
   labels: Array<CitationLabel | null>;
@@ -53,7 +64,6 @@ function extractSources(msg: SessionMessage): {
   return { sources: [], labels: [] };
 }
 
-// sync metadata 또는 stream meta 에서 후속 질문 추출
 function extractFollowups(msg: SessionMessage): string[] {
   const candidate =
     msg.streamMeta?.suggested_followups ??
@@ -67,28 +77,31 @@ function isAssistant(msg: SessionMessage): boolean {
   return msg.role === "assistant";
 }
 
-// KG 모드 응답에서 부분 그래프 추출 (sync 응답에만 존재)
 function extractSubgraph(msg: SessionMessage): SubgraphData | null {
   const sg = msg.meta?.metadata.subgraph as SubgraphData | undefined;
   if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
   return sg;
 }
 
-export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
+export function ChatPanel({
+  session,
+  onUpdate,
+  onUpdateById,
+  isPending,
+  markPending,
+}: ChatPanelProps) {
   const [modes, setModes] = useState<ModeInfo[]>([]);
-  const [messages, setMessages] = useState<SessionMessage[]>(session.messages);
-  const [mode, setMode] = useState<Mode>(session.mode);
+  // session.messages 가 단일 진실 소스 — local mirror 두지 않음
+  const messages = session.messages;
+  const [mode, setModeLocal] = useState<Mode>(session.mode);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // mode 로딩 등 oneshot 에러
   const [aboutOpen, setAboutOpen] = useState(false);
   const [drawer, setDrawer] = useState<{
     items: SourceItem[];
     highlightedIndex?: number;
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // 진행 중 SSE / sync fetch 중단용 — 세션 전환 시 leak 방지 (W2)
-  const abortRef = useRef<AbortController | null>(null);
 
   // 모드 목록 로드 (1회)
   useEffect(() => {
@@ -97,23 +110,15 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
       .catch((e) => setError(`/modes 로드 실패: ${e.message}`));
   }, []);
 
-  // 세션 전환 시 local 상태 동기화 + 진행 중 요청 abort (이전 세션 답변 leak 방지)
+  // 세션 전환 시 입력/draft/drawer 만 reset (진행 중 답변은 abort 하지 않음)
   useEffect(() => {
-    setMessages(session.messages);
-    setMode(session.mode);
+    setModeLocal(session.mode);
     setInput("");
     setError(null);
     setDrawer(null);
-    return () => {
-      if (abortRef.current) {
-        abortRef.current.abort();
-        abortRef.current = null;
-        setBusy(false);
-      }
-    };
-  }, [session.id]);
+  }, [session.id, session.mode]);
 
-  // 새 메시지 도착 시 스크롤
+  // messages 변화 시 자동 스크롤
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -121,50 +126,45 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
     });
   }, [messages]);
 
-  function commit(nextMessages: SessionMessage[], nextMode?: Mode) {
-    onUpdate({
-      messages: nextMessages,
-      title: deriveTitle(nextMessages),
-      mode: nextMode ?? mode,
-    });
-  }
-
   function handleModeChange(m: Mode) {
-    if (busy) return;
-    setMode(m);
+    if (isPending) return;
+    setModeLocal(m);
     onUpdate({ mode: m });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || busy) return;
+    if (!input.trim() || isPending) return;
     const question = input.trim();
     setInput("");
     await sendQuestion(question);
   }
 
   async function sendQuestion(question: string) {
-    if (busy) return;
+    if (isPending) return;
     setError(null);
-    setBusy(true);
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
+    // 시작 시점의 sessionId 캡처 — 도중에 active 가 바뀌어도 이 값으로 commit
+    const startedSessionId = session.id;
+    const startMode = mode;
+    markPending(startedSessionId, true);
 
     let next: SessionMessage[] = [
-      ...messages,
+      ...session.messages,
       { role: "user", content: question },
       { role: "assistant", content: "", streaming: true },
     ];
-    setMessages(next);
+    onUpdateById(startedSessionId, {
+      messages: next,
+      title: deriveTitle(next),
+      mode: startMode,
+    });
 
     try {
-      if (mode === "hybrid") {
+      if (startMode === "hybrid") {
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
-        for await (const chunk of chatStream({ question, mode }, signal)) {
-          if (signal.aborted) return;
+        for await (const chunk of chatStream({ question, mode: startMode })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
             continue;
@@ -174,9 +174,8 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
             ...next.slice(0, -1),
             { role: "assistant", content: text, streaming: true },
           ];
-          setMessages(next);
+          onUpdateById(startedSessionId, { messages: next });
         }
-        if (signal.aborted) return;
         next = [
           ...next.slice(0, -1),
           {
@@ -186,10 +185,12 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
             streaming: false,
           },
         ];
-        setMessages(next);
+        onUpdateById(startedSessionId, {
+          messages: next,
+          title: deriveTitle(next),
+        });
       } else {
-        const resp = await chatSync({ question, mode }, signal);
-        if (signal.aborted) return;
+        const resp = await chatSync({ question, mode: startMode });
         next = [
           ...next.slice(0, -1),
           {
@@ -199,20 +200,15 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
             streaming: false,
           },
         ];
-        setMessages(next);
+        onUpdateById(startedSessionId, {
+          messages: next,
+          title: deriveTitle(next),
+        });
       }
-      if (signal.aborted) return;
-      commit(next);
     } catch (err: unknown) {
-      // 의도된 중단 (세션 전환) 은 사용자에게 노출하지 않음
-      if (
-        signal.aborted ||
-        (err instanceof DOMException && err.name === "AbortError")
-      ) {
-        return;
-      }
+      // AbortError 는 거의 일어나지 않지만 안전 차원에서 처리
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const errMsg = err instanceof Error ? err.message : String(err);
-      setError(errMsg);
       next = [
         ...next.slice(0, -1),
         {
@@ -221,20 +217,25 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
           streaming: false,
         },
       ];
-      setMessages(next);
-      commit(next);
+      onUpdateById(startedSessionId, {
+        messages: next,
+        title: deriveTitle(next),
+      });
     } finally {
-      // 다른 호출이 abortRef 를 갈아끼우지 않은 경우에만 정리
-      if (abortRef.current === controller) abortRef.current = null;
-      if (!signal.aborted) setBusy(false);
+      markPending(startedSessionId, false);
     }
   }
 
   return (
     <div className="flex flex-col h-full flex-1 max-w-3xl w-full mx-auto">
-      {/* 헤더 — 미니멀: 타이틀 + 정보 아이콘만 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
-        <h1 className="text-lg font-semibold truncate">
+        <h1 className="text-lg font-semibold truncate flex items-center gap-2">
+          {isPending && (
+            <span
+              aria-label="응답 진행 중"
+              className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse shrink-0"
+            />
+          )}
           {session.title || "칼빈 신학 챗봇"}
         </h1>
         <button
@@ -256,10 +257,9 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
         onClose={() => setDrawer(null)}
       />
 
-      {/* 대화 영역 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
-          <SuggestedPrompts onPick={sendQuestion} disabled={busy} />
+          <SuggestedPrompts onPick={sendQuestion} disabled={isPending} />
         )}
         {messages.map((m, i) => {
           const { sources, labels } = extractSources(m);
@@ -340,7 +340,7 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
                 <FollowupChips
                   questions={followups}
                   onPick={sendQuestion}
-                  disabled={busy}
+                  disabled={isPending}
                 />
               )}
             </div>
@@ -363,15 +363,15 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="질문을 입력하세요…"
-            disabled={busy}
+            disabled={isPending}
             className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:bg-slate-100"
           />
           <button
             type="submit"
-            disabled={busy || !input.trim()}
+            disabled={isPending || !input.trim()}
             className="rounded-md bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
           >
-            {busy ? "전송 중…" : "전송"}
+            {isPending ? "전송 중…" : "전송"}
           </button>
         </form>
       </div>

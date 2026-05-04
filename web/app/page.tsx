@@ -15,16 +15,25 @@ export default function HomePage() {
     );
   }
 
+  const isActivePending = session.pendingIds.has(session.active.id);
+
   return (
     <main className="h-screen flex">
       <SessionSidebar
         sessions={session.sessions}
         activeId={session.activeId}
+        pendingIds={session.pendingIds}
         onSelect={session.setActive}
         onNew={() => session.createNew(session.active?.mode ?? "hybrid")}
         onDelete={session.remove}
       />
-      <ChatPanel session={session.active} onUpdate={session.updateActive} />
+      <ChatPanel
+        session={session.active}
+        onUpdate={session.updateActive}
+        onUpdateById={session.updateById}
+        isPending={isActivePending}
+        markPending={session.markPending}
+      />
     </main>
   );
 }

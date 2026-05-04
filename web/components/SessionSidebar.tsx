@@ -6,6 +6,7 @@ import type { ChatSession } from "@/lib/sessionStore";
 interface Props {
   sessions: ChatSession[];
   activeId: string | null;
+  pendingIds?: ReadonlySet<string>;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
@@ -25,6 +26,7 @@ const MODE_LABEL: Record<string, string> = {
 export function SessionSidebar({
   sessions,
   activeId,
+  pendingIds,
   onSelect,
   onNew,
   onDelete,
@@ -49,37 +51,48 @@ export function SessionSidebar({
         )}
         {sorted.map((s) => {
           const isActive = s.id === activeId;
+          const isPending = pendingIds?.has(s.id) ?? false;
           return (
             <div
               key={s.id}
               role="button"
               tabIndex={0}
-              onClick={() => !busy && onSelect(s.id)}
+              onClick={() => onSelect(s.id)}
               onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && !busy) {
+                if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelect(s.id);
                 }
               }}
               className={[
                 "group relative rounded-md px-2 py-2 mb-0.5 cursor-pointer transition-colors text-sm border",
-                busy ? "opacity-60 cursor-not-allowed" : "",
                 isActive
                   ? "bg-white border-primary text-ink"
                   : "border-transparent hover:bg-white hover:border-slate-200 text-slate-700",
               ].join(" ")}
             >
-              <div className="truncate pr-6 leading-tight">
-                {s.title || "새 대화"}
+              <div className="truncate pr-6 leading-tight flex items-center gap-1.5">
+                {isPending && (
+                  <span
+                    aria-label="응답 진행 중"
+                    title="응답 진행 중"
+                    className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0"
+                  />
+                )}
+                <span className="truncate">{s.title || "새 대화"}</span>
               </div>
               <div className="text-[10px] text-slate-400 mt-0.5 truncate">
                 {MODE_LABEL[s.mode] ?? s.mode} · {s.messages.length} 메시지
+                {isPending ? " · 응답 중" : ""}
               </div>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (busy) return;
+                  if (isPending) {
+                    alert("응답 중인 대화는 삭제할 수 없습니다.");
+                    return;
+                  }
                   if (confirm("이 대화를 삭제할까요?")) onDelete(s.id);
                 }}
                 className="absolute right-1.5 top-1.5 p-1 rounded hover:bg-rose-50 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 focus:opacity-100"

@@ -86,12 +86,21 @@ export interface UseSessionsResult {
   updateActive: (
     patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
   ) => void;
+  /** 특정 sessionId 를 직접 갱신. 백그라운드 답변이 startedSessionId 로 commit 할 때 사용. */
+  updateById: (
+    id: string,
+    patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
+  ) => void;
+  /** 진행 중 답변이 있는 session id 집합 (메모리 only, 영속화 안 함). */
+  pendingIds: ReadonlySet<string>;
+  markPending: (id: string, pending: boolean) => void;
   ready: boolean;
 }
 
 export function useSessions(): UseSessionsResult {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [ready, setReady] = useState(false);
 
   // mount 후 localStorage 로딩 (SSR/CSR mismatch 회피)
@@ -168,6 +177,32 @@ export function useSessions(): UseSessionsResult {
     [activeId],
   );
 
+  const updateById = useCallback(
+    (
+      id: string,
+      patch: Partial<ChatSession> | ((s: ChatSession) => ChatSession),
+    ) => {
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id !== id) return s;
+          const updated =
+            typeof patch === "function" ? patch(s) : { ...s, ...patch };
+          return { ...updated, updatedAt: Date.now() };
+        }),
+      );
+    },
+    [],
+  );
+
+  const markPending = useCallback((id: string, pending: boolean) => {
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      if (pending) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   return {
     sessions,
     activeId,
@@ -176,6 +211,9 @@ export function useSessions(): UseSessionsResult {
     setActive,
     remove,
     updateActive,
+    updateById,
+    pendingIds,
+    markPending,
     ready,
   };
 }
