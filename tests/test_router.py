@@ -56,3 +56,25 @@ def test_KG가_Agentic보다_우선():
 
 def test_공백만_있으면_hybrid_폴백():
     assert route_question("   ") == "hybrid"
+
+
+# ---- LLM 분류기 (env flag) ----
+def test_LLM_분류기_비활성_default(monkeypatch: pytest.MonkeyPatch):
+    """ROUTER_LLM_CLASSIFIER 미설정 시 휴리스틱 동작."""
+    monkeypatch.delenv("ROUTER_LLM_CLASSIFIER", raising=False)
+    assert route_question("어거스틴이 칼빈에게 미친 영향은?") == "kg"
+
+
+def test_LLM_분류기_실패시_휴리스틱_fallback(monkeypatch: pytest.MonkeyPatch):
+    """LLM 호출 실패해도 라우팅 자체는 진행."""
+    monkeypatch.setenv("ROUTER_LLM_CLASSIFIER", "true")
+
+    # _get_classifier_llm 을 항상 raise 하는 mock 으로 교체
+    from rag_core import router as router_mod
+
+    def _broken_llm():
+        raise RuntimeError("openai api key 없음")
+
+    monkeypatch.setattr(router_mod, "_get_classifier_llm", _broken_llm)
+    # 휴리스틱 fallback 으로 KG 결정
+    assert route_question("어거스틴이 칼빈에게 미친 영향은?") == "kg"
