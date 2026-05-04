@@ -32,6 +32,13 @@ _AGENTIC_HINTS: tuple[str, ...] = (
 )
 
 
+def _matched_hint(q: str, hints: tuple[str, ...]) -> str | None:
+    for h in hints:
+        if h in q:
+            return h
+    return None
+
+
 def route_question(question: str) -> Mode:
     """질문 한 줄을 보고 적합 모드를 결정한다.
 
@@ -39,8 +46,25 @@ def route_question(question: str) -> Mode:
     KG 가 가장 좁고, Hybrid 가 가장 넓다.
     """
     q = question.strip()
-    if any(h in q for h in _KG_HINTS):
-        return "kg"
-    if any(h in q for h in _AGENTIC_HINTS):
-        return "agentic"
-    return "hybrid"
+    decided: Mode
+    matched: str | None = None
+    if (m := _matched_hint(q, _KG_HINTS)) is not None:
+        decided, matched = "kg", m
+    elif (m := _matched_hint(q, _AGENTIC_HINTS)) is not None:
+        decided, matched = "agentic", m
+    else:
+        decided = "hybrid"
+
+    # trace 한 줄 — 의사결정 기록 (의존성 회피: import 실패해도 라우팅은 진행)
+    try:
+        from infra.observability import trace_event
+
+        trace_event(
+            "router.decide",
+            question_preview=q[:120],
+            decided=decided,
+            matched_hint=matched,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return decided

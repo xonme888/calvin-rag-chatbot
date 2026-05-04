@@ -42,6 +42,9 @@ class AuditRecord:
     guard_action: str = "allow"  # "allow" | "input_blocked" | "output_blocked" | "sanitized"
     guard_reason: str | None = None
     elapsed_seconds: float = 0.0
+    trace_id: str | None = None  # observability.LangChainTracer 와 결합용
+    routed_mode: str | None = None  # 라우터가 결정한 실제 모드
+    auto_routed: bool = False
     timestamp: str = field(
         default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
     )
@@ -68,8 +71,22 @@ def _ensure_schema(db_path: Path) -> None:
             )
             """
         )
+        # 추가 컬럼 — 기존 DB 도 ALTER 로 안전하게 보강
+        for col, ddl in (
+            ("trace_id", "TEXT"),
+            ("routed_mode", "TEXT"),
+            ("auto_routed", "INTEGER DEFAULT 0"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE audit_log ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError:
+                # 이미 존재 — 무시
+                pass
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_trace_id ON audit_log(trace_id)"
         )
         conn.commit()
 
@@ -93,8 +110,9 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
             "INSERT INTO audit_log "
             "(timestamp, ip, mode, question, answer_preview, "
             " tokens_in, tokens_out, cost_krw, "
-            " guard_action, guard_reason, elapsed_seconds) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " guard_action, guard_reason, elapsed_seconds, "
+            " trace_id, routed_mode, auto_routed) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 record.timestamp,
                 record.ip,
@@ -107,6 +125,9 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
                 record.guard_action,
                 record.guard_reason,
                 record.elapsed_seconds,
+                record.trace_id,
+                record.routed_mode,
+                1 if record.auto_routed else 0,
             ),
         )
         conn.commit()

@@ -27,6 +27,12 @@ from api.middleware.audit_log import AuditRecord, log_chat
 from api.middleware.rate_limiter import limiter
 from api.middleware.token_budget import check_token_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
+from infra.observability import (
+    LangChainTracer,
+    new_trace_id,
+    set_current_trace_id,
+    trace_event,
+)
 from infra.usage_tracker import UsageTracker
 from rag_core.mode_registry import get as get_mode_entry
 from rag_core.router import route_question
@@ -68,12 +74,17 @@ def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
     return history
 
 
-def _invoke_sync(req: ChatRequest) -> dict[str, Any]:
+def _invoke_sync(
+    req: ChatRequest, trace_id: str | None = None
+) -> dict[str, Any]:
     """모드별 동기 RAG 호출 — ThreadPool 안에서 실행될 함수.
 
     Registry 에서 ModeEntry 를 조회하고 health → factory → query 순으로 호출한다.
     Hybrid 만 chat_history/dense_weight 인자가 추가로 필요해 분기 1곳만 남음.
     """
+    # ThreadPool 워커는 별도 컨텍스트 — trace_id 다시 set
+    if trace_id:
+        set_current_trace_id(trace_id)
     stats = get_session_stats()
 
     try:
@@ -90,13 +101,16 @@ def _invoke_sync(req: ChatRequest) -> dict[str, Any]:
 
     rag = entry.factory()
     tracker = UsageTracker(stats, mode=entry.tracker_mode, model=_MODEL)
+    callbacks: list[Any] = [tracker]
+    if trace_id:
+        callbacks.append(LangChainTracer(trace_id))
 
     # hybrid 만 chat_history/dense_weight 옵션 지원 — capability 차이
     if req.mode == "hybrid":
         rag.config.dense_weight = req.dense_weight
         history = _to_langchain_history(req.chat_history)
-        return rag.query(req.question, chat_history=history, callbacks=[tracker])
-    return rag.query(req.question, callbacks=[tracker])
+        return rag.query(req.question, chat_history=history, callbacks=callbacks)
+    return rag.query(req.question, callbacks=callbacks)
 
 
 @router.post("/sync", response_model=ChatSyncResponse)
@@ -113,6 +127,16 @@ async def chat_sync(
     """
     ip = _client_ip(request)
     stats = get_session_stats()
+    # 한 request 단위 trace_id — observability.LangChainTracer 와 audit_log 가 공유
+    trace_id = new_trace_id()
+    set_current_trace_id(trace_id)
+    trace_event(
+        "request.start",
+        endpoint="/chat/sync",
+        ip=ip,
+        question_preview=req.question[:120],
+        client_mode=req.mode,
+    )
 
     # 0. Token budget cap (누적치)
     check_token_budget(stats)
@@ -140,7 +164,7 @@ async def chat_sync(
     # 2. 동기 RAG 호출을 async 래핑 (ThreadPool)
     start = time.time()
     try:
-        result = await asyncio.to_thread(_invoke_sync, req)
+        result = await asyncio.to_thread(_invoke_sync, req, trace_id)
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
@@ -184,9 +208,19 @@ async def chat_sync(
             guard_action=guard_action,
             guard_reason=guard_reason,
             elapsed_seconds=elapsed,
+            trace_id=trace_id,
+            routed_mode=req.mode,
+            auto_routed=was_auto,
         ),
     )
+    trace_event(
+        "request.end",
+        endpoint="/chat/sync",
+        elapsed_ms=int(elapsed * 1000),
+        guard_action=guard_action,
+    )
 
+    metadata = {**metadata, "trace_id": trace_id}
     return ChatSyncResponse(
         answer=answer,
         source_documents=source_documents,
@@ -206,7 +240,9 @@ def _mode_key(mode: str) -> str:
 # ====================================================================
 # SSE 스트리밍 — Vercel AI SDK Stream Protocol v1 호환
 # ====================================================================
-async def _stream_chat_events(req: ChatRequest, was_auto: bool = False):
+async def _stream_chat_events(
+    req: ChatRequest, was_auto: bool = False, trace_id: str | None = None
+):
     """async generator — Vercel AI SDK Data Stream Protocol 형식.
 
     포맷:
@@ -219,17 +255,19 @@ async def _stream_chat_events(req: ChatRequest, was_auto: bool = False):
     Agentic/KG 는 sync 호출 결과를 텍스트 청크로 분할해 yield (스트리밍 흉내).
     """
     if req.mode == "hybrid":
-        async for event in _stream_hybrid(req, was_auto):
+        async for event in _stream_hybrid(req, was_auto, trace_id):
             yield event
     else:
         # Agentic / KG 는 동기 호출 후 청크 단위 replay (간이 SSE)
-        async for event in _stream_sync_replay(req, was_auto):
+        async for event in _stream_sync_replay(req, was_auto, trace_id):
             yield event
 
     yield {"event": "done", "data": "[DONE]"}
 
 
-async def _stream_hybrid(req: ChatRequest, was_auto: bool = False):
+async def _stream_hybrid(
+    req: ChatRequest, was_auto: bool = False, trace_id: str | None = None
+):
     """Hybrid stream_query 를 async 변환해 토큰 단위 SSE.
 
     Stream 종료 후 ``event: meta`` 1회 emit — cited_pages, source_pages_label,
@@ -240,14 +278,20 @@ async def _stream_hybrid(req: ChatRequest, was_auto: bool = False):
     history = _to_langchain_history(req.chat_history)
     stats = get_session_stats()
     tracker = UsageTracker(stats, mode="Hybrid", model=_MODEL)
+    callbacks: list[Any] = [tracker]
+    if trace_id:
+        callbacks.append(LangChainTracer(trace_id))
 
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     def producer() -> None:
+        # ThreadPool 워커 컨텍스트에서 trace_id 다시 set
+        if trace_id:
+            set_current_trace_id(trace_id)
         try:
             for chunk in hybrid.stream_query(
-                req.question, chat_history=history, callbacks=[tracker]
+                req.question, chat_history=history, callbacks=callbacks
             ):
                 loop.call_soon_threadsafe(queue.put_nowait, chunk)
         finally:
@@ -279,13 +323,15 @@ async def _stream_hybrid(req: ChatRequest, was_auto: bool = False):
     }
 
 
-async def _stream_sync_replay(req: ChatRequest, was_auto: bool):
+async def _stream_sync_replay(
+    req: ChatRequest, was_auto: bool, trace_id: str | None = None
+):
     """Agentic/KG: 동기 호출 후 답변을 청크 단위로 흘려보냄.
 
     Stream 종료 후 ``event: meta`` 1회 emit — Hybrid 와 동일 envelope 로
     subgraph/source/cited_pages/followups 등 메타를 잃지 않게 한다.
     """
-    result = await asyncio.to_thread(_invoke_sync, req)
+    result = await asyncio.to_thread(_invoke_sync, req, trace_id)
     answer = result.get("final_answer", "")
 
     # 간단 청크 분할 — 토큰 단위 정확도는 떨어지나 UX 충분
@@ -363,6 +409,17 @@ async def chat_stream(
     stats = get_session_stats()
     check_token_budget(stats)
 
+    # 한 stream 단위 trace_id
+    trace_id = new_trace_id()
+    set_current_trace_id(trace_id)
+    trace_event(
+        "request.start",
+        endpoint="/chat/stream",
+        ip=ip,
+        question_preview=req.question[:120],
+        client_mode=req.mode,
+    )
+
     # mode='auto' 라우팅 — 사용자에게 모드 노출 X
     req, was_auto = _resolve_mode(req)
 
@@ -396,9 +453,10 @@ async def chat_stream(
     )
 
     return EventSourceResponse(
-        _stream_chat_events(req, was_auto),
+        _stream_chat_events(req, was_auto, trace_id),
         headers={
             "X-Accel-Buffering": "no",  # nginx/CF 버퍼링 차단 (docs/me/010)
             "x-vercel-ai-ui-message-stream": "v1",  # Vercel AI SDK 호환
+            "X-Trace-Id": trace_id,
         },
     )
