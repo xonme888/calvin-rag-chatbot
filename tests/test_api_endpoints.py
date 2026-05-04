@@ -132,8 +132,8 @@ def _make_mock_hybrid(answer: str = "mocked answer", sources: list[str] | None =
 def test_chat_sync_hybrid_returns_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mock Hybrid 로 정상 흐름 — 입력 가드 통과 → mock 호출 → 출력 가드 → 응답."""
     mock = _make_mock_hybrid(answer="예정론은 칼빈의 핵심 교리다.")
-    # api.routes.chat 모듈이 import 한 함수도 같이 갈아끼움
-    monkeypatch.setattr("api.routes.chat.get_hybrid_rag", lambda: mock)
+    # ModeRegistry 가 lazy lookup 하므로 dependencies 모듈의 함수만 갈아끼우면 충분
+    monkeypatch.setattr("api.dependencies.get_hybrid_rag", lambda: mock)
 
     client = TestClient(app)
     resp = client.post(
@@ -150,9 +150,9 @@ def test_chat_sync_hybrid_returns_answer(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_chat_sync_kg_unavailable_returns_503(monkeypatch: pytest.MonkeyPatch) -> None:
     """KG 모드 + 인스턴스 None 일 때 503 반환."""
-    monkeypatch.setattr("api.routes.chat.get_kg_rag_or_none", lambda: None)
+    monkeypatch.setattr("api.dependencies.get_kg_rag_or_none", lambda: None)
 
     client = TestClient(app)
     resp = client.post("/chat/sync", json={"question": "Q", "mode": "kg"})
     assert resp.status_code == 503
-    assert "KG" in resp.json()["detail"]
+    assert "Knowledge Graph" in resp.json()["detail"]

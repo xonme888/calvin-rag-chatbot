@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api.dependencies import get_kg_rag_or_none
+# dependencies import 부수효과 — mode_registry 에 모드 등록을 트리거
+import api.dependencies  # noqa: F401
 from api.schemas import HealthResponse, ModeInfo, ModesResponse
+from rag_core.mode_registry import all_entries
 
 router = APIRouter(tags=["meta"])
-
-
-class HealthResponse_:  # placeholder so import order doesn't fail
-    pass
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -26,22 +24,19 @@ async def health() -> HealthResponse:
 
 @router.get("/modes", response_model=ModesResponse)
 async def modes() -> ModesResponse:
-    """사용 가능 모드 목록 — KG는 Neo4j 가용 시만 ``available=True``.
+    """사용 가능 모드 목록 — registry 순회.
 
-    Streamlit `_check_kg_available()` 와 동일 사상 — graceful degradation.
+    새 모드 추가 = ``rag_core/mode_registry.register(...)`` 한 번. 이 라우트는 무수정.
     """
-    kg_instance = get_kg_rag_or_none()
-    return ModesResponse(
-        modes=[
-            ModeInfo(name="hybrid", label="Hybrid (BM25+Dense+RRF)", available=True),
-            ModeInfo(name="agentic", label="Agentic (create_agent)", available=True),
+    out: list[ModeInfo] = []
+    for entry in all_entries():
+        available, reason = entry.health()
+        out.append(
             ModeInfo(
-                name="kg",
-                label="Knowledge Graph (Neo4j+Cypher)",
-                available=kg_instance is not None,
-                reason=None
-                if kg_instance is not None
-                else "Neo4j 미연결 또는 그래프 비어 있음",
-            ),
-        ]
-    )
+                name=entry.name,
+                label=entry.label,
+                available=available,
+                reason=reason,
+            )
+        )
+    return ModesResponse(modes=out)

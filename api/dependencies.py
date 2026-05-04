@@ -20,6 +20,7 @@ from rag_core.guardrail import (
     get_output_guardrail,
 )
 from rag_core.hybrid import HybridRAG
+from rag_core.mode_registry import ModeEntry, register
 
 
 @lru_cache(maxsize=1)
@@ -85,3 +86,54 @@ def reset_dependency_cache() -> None:
     get_agentic_rag.cache_clear()
     get_kg_rag_or_none.cache_clear()
     get_session_stats.cache_clear()
+
+
+# ====================================================================
+# Mode Registry 등록 — 새 모드 추가 = 여기에 register(...) 한 번
+# ====================================================================
+def _kg_health() -> tuple[bool, str | None]:
+    """KG 가용성 — Neo4j 연결 + 그래프 인덱싱 상태."""
+    if get_kg_rag_or_none() is None:
+        return False, "Neo4j 미연결 또는 그래프 비어 있음"
+    return True, None
+
+
+def _kg_factory() -> Any:
+    """KG 인스턴스 — health 통과 보장된 시점에 호출."""
+    inst = get_kg_rag_or_none()
+    if inst is None:
+        # health() 와 호출 사이에 상태가 바뀐 경우만 도달
+        raise RuntimeError("KG 어댑터 가용성 변경 — Neo4j 연결 확인")
+    return inst
+
+
+# factory/health 는 lambda 로 lazy lookup — monkeypatch 가능
+# (테스트가 api.dependencies.get_hybrid_rag 등을 setattr 해도 registry 가 새 함수 호출)
+register(
+    ModeEntry(
+        name="hybrid",
+        label="Hybrid (BM25+Dense+RRF)",
+        tracker_mode="Hybrid",
+        factory=lambda: get_hybrid_rag(),
+        sse_capable=True,
+    )
+)
+register(
+    ModeEntry(
+        name="agentic",
+        label="Agentic (create_agent)",
+        tracker_mode="Agentic",
+        factory=lambda: get_agentic_rag(),
+        sse_capable=False,
+    )
+)
+register(
+    ModeEntry(
+        name="kg",
+        label="Knowledge Graph (Neo4j+Cypher)",
+        tracker_mode="Knowledge Graph",
+        factory=_kg_factory,
+        sse_capable=False,
+        health=_kg_health,
+    )
+)

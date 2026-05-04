@@ -20,9 +20,7 @@ from sse_starlette.sse import EventSourceResponse
 from api.dependencies import (
     check_input_guard,
     check_output_guard,
-    get_agentic_rag,
     get_hybrid_rag,
-    get_kg_rag_or_none,
     get_session_stats,
 )
 from api.middleware.audit_log import AuditRecord, log_chat
@@ -30,6 +28,7 @@ from api.middleware.rate_limiter import limiter
 from api.middleware.token_budget import check_token_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from infra.usage_tracker import UsageTracker
+from rag_core.mode_registry import get as get_mode_entry
 from rag_core.router import route_question
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -72,31 +71,32 @@ def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
 def _invoke_sync(req: ChatRequest) -> dict[str, Any]:
     """모드별 동기 RAG 호출 — ThreadPool 안에서 실행될 함수.
 
-    가드/usage_tracker 콜백 주입 + 모드 분기 처리.
+    Registry 에서 ModeEntry 를 조회하고 health → factory → query 순으로 호출한다.
+    Hybrid 만 chat_history/dense_weight 인자가 추가로 필요해 분기 1곳만 남음.
     """
     stats = get_session_stats()
 
-    if req.mode == "kg":
-        kg = get_kg_rag_or_none()
-        if kg is None:
-            raise HTTPException(
-                status_code=503,
-                detail="KG 모드 비활성화 — Neo4j 미연결 또는 그래프 비어 있음.",
-            )
-        tracker = UsageTracker(stats, mode="Knowledge Graph", model=_MODEL)
-        return kg.query(req.question, callbacks=[tracker])
+    try:
+        entry = get_mode_entry(req.mode)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"알 수 없는 모드: {req.mode}")
 
-    if req.mode == "agentic":
-        agentic = get_agentic_rag()
-        tracker = UsageTracker(stats, mode="Agentic", model=_MODEL)
-        return agentic.query(req.question, callbacks=[tracker])
+    available, reason = entry.health()
+    if not available:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{entry.label} 비활성화 — {reason or '사유 미상'}",
+        )
 
-    # hybrid (default)
-    hybrid = get_hybrid_rag()
-    hybrid.config.dense_weight = req.dense_weight
-    history = _to_langchain_history(req.chat_history)
-    tracker = UsageTracker(stats, mode="Hybrid", model=_MODEL)
-    return hybrid.query(req.question, chat_history=history, callbacks=[tracker])
+    rag = entry.factory()
+    tracker = UsageTracker(stats, mode=entry.tracker_mode, model=_MODEL)
+
+    # hybrid 만 chat_history/dense_weight 옵션 지원 — capability 차이
+    if req.mode == "hybrid":
+        rag.config.dense_weight = req.dense_weight
+        history = _to_langchain_history(req.chat_history)
+        return rag.query(req.question, chat_history=history, callbacks=[tracker])
+    return rag.query(req.question, callbacks=[tracker])
 
 
 @router.post("/sync", response_model=ChatSyncResponse)
@@ -196,8 +196,11 @@ async def chat_sync(
 
 
 def _mode_key(mode: str) -> str:
-    """API mode 식별자 → SessionStats key."""
-    return {"hybrid": "Hybrid", "agentic": "Agentic", "kg": "Knowledge Graph"}.get(mode, mode)
+    """API mode 식별자 → SessionStats key — registry 의 tracker_mode 위임."""
+    try:
+        return get_mode_entry(mode).tracker_mode
+    except KeyError:
+        return mode
 
 
 # ====================================================================
