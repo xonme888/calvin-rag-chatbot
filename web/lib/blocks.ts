@@ -85,7 +85,10 @@ function extractFollowups(msg: SessionMessage): string[] {
 }
 
 function extractSubgraph(msg: SessionMessage): SubgraphPayload | null {
-  const sg = msg.meta?.metadata.subgraph as SubgraphPayload | undefined;
+  // streamMeta 우선 (auto→KG 라우팅 시 SSE 경로) → 없으면 sync metadata
+  const sg =
+    (msg.streamMeta?.subgraph as SubgraphPayload | null | undefined) ??
+    (msg.meta?.metadata.subgraph as SubgraphPayload | undefined);
   if (!sg || !Array.isArray(sg.nodes) || sg.nodes.length === 0) return null;
   return sg;
 }

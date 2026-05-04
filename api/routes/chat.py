@@ -206,7 +206,7 @@ def _mode_key(mode: str) -> str:
 # ====================================================================
 # SSE 스트리밍 — Vercel AI SDK Stream Protocol v1 호환
 # ====================================================================
-async def _stream_chat_events(req: ChatRequest):
+async def _stream_chat_events(req: ChatRequest, was_auto: bool = False):
     """async generator — Vercel AI SDK Data Stream Protocol 형식.
 
     포맷:
@@ -219,17 +219,17 @@ async def _stream_chat_events(req: ChatRequest):
     Agentic/KG 는 sync 호출 결과를 텍스트 청크로 분할해 yield (스트리밍 흉내).
     """
     if req.mode == "hybrid":
-        async for event in _stream_hybrid(req):
+        async for event in _stream_hybrid(req, was_auto):
             yield event
     else:
         # Agentic / KG 는 동기 호출 후 청크 단위 replay (간이 SSE)
-        async for event in _stream_sync_replay(req):
+        async for event in _stream_sync_replay(req, was_auto):
             yield event
 
     yield {"event": "done", "data": "[DONE]"}
 
 
-async def _stream_hybrid(req: ChatRequest):
+async def _stream_hybrid(req: ChatRequest, was_auto: bool = False):
     """Hybrid stream_query 를 async 변환해 토큰 단위 SSE.
 
     Stream 종료 후 ``event: meta`` 1회 emit — cited_pages, source_pages_label,
@@ -266,35 +266,29 @@ async def _stream_hybrid(req: ChatRequest):
 
     # Stream 종료 후 — _last_metadata 가 채워져 있으므로 meta 이벤트 1회 emit
     last_meta = hybrid._last_metadata or {}
-    mode_stats = stats.by_mode.get("Hybrid")
-    meta_payload = {
-        "cited_pages": last_meta.get("cited_pages", []),
-        "source_documents": last_meta.get("source_documents", []),
-        "source_pages": last_meta.get("source_pages", []),
-        "source_pages_label": last_meta.get("source_pages_label", []),
-        "elapsed_seconds": last_meta.get("elapsed_seconds"),
-        "confidence": last_meta.get("confidence"),
-        "pattern": last_meta.get("pattern", "Hybrid RAG"),
-        "mode": "hybrid",
-        "routed_mode": "hybrid",  # 라우터가 hybrid 로 결정했거나 명시 hybrid
-        "tokens": {
-            "input": mode_stats.input_tokens if mode_stats else 0,
-            "output": mode_stats.output_tokens if mode_stats else 0,
-        },
-        "suggested_followups": last_meta.get("suggested_followups", []),
-    }
+    payload = _build_stream_meta_payload(
+        req=req,
+        was_auto=was_auto,
+        result_metadata=last_meta,
+        source_documents=last_meta.get("source_documents", []),
+        stats=stats,
+    )
     yield {
         "event": "meta",
-        "data": json.dumps(meta_payload, ensure_ascii=False, default=str),
+        "data": json.dumps(payload, ensure_ascii=False, default=str),
     }
 
 
-async def _stream_sync_replay(req: ChatRequest):
-    """Agentic/KG: 동기 호출 후 답변을 단어 단위로 흘려보냄 (간이 SSE)."""
+async def _stream_sync_replay(req: ChatRequest, was_auto: bool):
+    """Agentic/KG: 동기 호출 후 답변을 청크 단위로 흘려보냄.
+
+    Stream 종료 후 ``event: meta`` 1회 emit — Hybrid 와 동일 envelope 로
+    subgraph/source/cited_pages/followups 등 메타를 잃지 않게 한다.
+    """
     result = await asyncio.to_thread(_invoke_sync, req)
     answer = result.get("final_answer", "")
 
-    # 간단 청크 분할 — 토큰 단위 정확도는 떨어지나 시연/UX 충분
+    # 간단 청크 분할 — 토큰 단위 정확도는 떨어지나 UX 충분
     chunk_size = 16
     for i in range(0, len(answer), chunk_size):
         chunk = answer[i : i + chunk_size]
@@ -303,6 +297,55 @@ async def _stream_sync_replay(req: ChatRequest):
             "data": json.dumps({"type": "text-delta", "delta": chunk}, ensure_ascii=False),
         }
         await asyncio.sleep(0)
+
+    payload = _build_stream_meta_payload(
+        req=req,
+        was_auto=was_auto,
+        result_metadata=result.get("metadata", {}) or {},
+        source_documents=result.get("source_documents", []),
+        stats=get_session_stats(),
+    )
+    yield {
+        "event": "meta",
+        "data": json.dumps(payload, ensure_ascii=False, default=str),
+    }
+
+
+def _build_stream_meta_payload(
+    *,
+    req: ChatRequest,
+    was_auto: bool,
+    result_metadata: dict[str, Any],
+    source_documents: list[str],
+    stats: Any,
+) -> dict[str, Any]:
+    """Hybrid/Agentic/KG 공통 SSE meta envelope.
+
+    프론트는 이 한 형태만 보면 되도록 모든 모드의 metadata 키를 평탄화한다.
+    값이 없으면 빈 배열/None 으로 채워 envelope 일관성 유지.
+    """
+    tracker_key = _mode_key(req.mode)
+    mode_stats = stats.by_mode.get(tracker_key)
+    return {
+        "cited_pages": result_metadata.get("cited_pages", []),
+        "source_documents": source_documents,
+        "source_pages": result_metadata.get("source_pages", []),
+        "source_pages_label": result_metadata.get("source_pages_label", []),
+        "elapsed_seconds": result_metadata.get("elapsed_seconds"),
+        "confidence": result_metadata.get("confidence"),
+        "pattern": result_metadata.get("pattern", req.mode),
+        "mode": req.mode,
+        "routed_mode": req.mode,
+        "auto_routed": was_auto,
+        "subgraph": result_metadata.get("subgraph"),
+        "tool_calls": result_metadata.get("tool_calls", []),
+        "tool_call_count": result_metadata.get("tool_call_count"),
+        "suggested_followups": result_metadata.get("suggested_followups", []),
+        "tokens": {
+            "input": mode_stats.input_tokens if mode_stats else 0,
+            "output": mode_stats.output_tokens if mode_stats else 0,
+        },
+    }
 
 
 @router.post("/stream")
@@ -321,7 +364,7 @@ async def chat_stream(
     check_token_budget(stats)
 
     # mode='auto' 라우팅 — 사용자에게 모드 노출 X
-    req, _was_auto = _resolve_mode(req)
+    req, was_auto = _resolve_mode(req)
 
     # 입력 가드만 inline
     in_allow, in_reason, in_sanitized = check_input_guard(req.question)
@@ -353,7 +396,7 @@ async def chat_stream(
     )
 
     return EventSourceResponse(
-        _stream_chat_events(req),
+        _stream_chat_events(req, was_auto),
         headers={
             "X-Accel-Buffering": "no",  # nginx/CF 버퍼링 차단 (docs/me/010)
             "x-vercel-ai-ui-message-stream": "v1",  # Vercel AI SDK 호환

@@ -45,6 +45,14 @@ export interface ChatStreamMeta {
   auto_routed?: boolean;
   tokens: { input: number; output: number };
   suggested_followups?: string[];
+  // KG 모드 — sync/stream 양쪽에서 동일 envelope
+  subgraph?: {
+    nodes: Array<{ id: string; label: string; type?: string }>;
+    edges: Array<{ source: string; target: string; label?: string }>;
+  } | null;
+  // Agentic 모드 — 도구 호출 정보
+  tool_calls?: Array<Record<string, unknown>>;
+  tool_call_count?: number;
 }
 
 export interface ChatSyncResponse {
