@@ -222,7 +222,24 @@ class AgenticRAG:
         self.hybrid: HybridRAG = hybrid_rag
         self.llm: BaseChatModel = llm or self.hybrid.llm
 
-        self._tools: list[BaseTool] = [self._make_search_tool()]
+        # 도구 등록 — Tool Registry 위임 (PRD-1)
+        # 본 모드의 핵심 도구 (search_documents) 를 registry 에 등록 후 가져온다.
+        # MCP 외부 도구는 mcp_adapter.load_mcp_tools 가 환경변수 allowlist 로 등록.
+        from rag_core.tools import register_tool, enabled_tools
+        from rag_core.tools.policy import ToolPolicy
+        from rag_core.tools.mcp_adapter import load_mcp_tools
+
+        register_tool(
+            self._make_search_tool(),
+            ToolPolicy(
+                name="search_documents",
+                timeout_seconds=15.0,
+                required_role="free",
+                description_safe=True,
+            ),
+        )
+        load_mcp_tools()  # 환경변수 MCP_SERVERS allowlist (현재는 stub, 0개)
+        self._tools: list[BaseTool] = enabled_tools(user_role="free")
 
         # langchain 1.x create_agent — middleware/cache 등 확장 파라미터 지원.
         # 반환은 CompiledStateGraph 이므로 .invoke/.stream 호출부는 호환.
