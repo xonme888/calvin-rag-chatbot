@@ -17,15 +17,14 @@
 
 from __future__ import annotations
 
-import json
-import logging
-import sys
 import time
 import uuid
 from contextvars import ContextVar
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
+
+from infra.observability_sinks import emit as _sink_emit
 
 # ---- request 단위 trace_id 전파 (FastAPI middleware → callback) ----
 _current_trace_id: ContextVar[str | None] = ContextVar("trace_id", default=None)
@@ -44,27 +43,17 @@ def get_current_trace_id() -> str | None:
     return _current_trace_id.get()
 
 
-# ---- 로거 ----
-_logger = logging.getLogger("calvin.trace")
-_logger.propagate = False
-if not _logger.handlers:
-    _h = logging.StreamHandler(sys.stdout)
-    _h.setFormatter(logging.Formatter("%(message)s"))
-    _logger.addHandler(_h)
-    _logger.setLevel(logging.INFO)
-
-
 def _emit(payload: dict[str, Any]) -> None:
-    """단일 trace 이벤트 출력 — JSON line. ensure_ascii=False 로 한글 가독성 유지."""
+    """단일 trace 이벤트 출력. sink 는 ``observability_sinks`` 가 환경변수로 선택.
+
+    - 기본: stdout JSON line
+    - 환경변수 ``LOG_SINK=loki|cloudwatch|noop`` 로 swap
+    """
     payload.setdefault("ts", time.time())
     tid = get_current_trace_id()
     if tid:
         payload.setdefault("trace_id", tid)
-    try:
-        _logger.info(json.dumps(payload, ensure_ascii=False, default=str))
-    except Exception:  # noqa: BLE001
-        # 로깅이 메인 흐름을 절대 막지 않도록
-        pass
+    _sink_emit(payload)
 
 
 def trace_event(step: str, **fields: Any) -> None:
