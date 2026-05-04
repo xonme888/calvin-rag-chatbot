@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 # 모드 식별자 (외부 API 표기 — 클라이언트에서 사용)
 ModeName = Literal["hybrid", "agentic", "kg"]
+# 클라이언트가 보낼 수 있는 모드 — "auto" 는 백엔드 라우터가 결정
+InputMode = Literal["auto", "hybrid", "agentic", "kg"]
 
 
 class HealthResponse(BaseModel):
@@ -30,7 +32,10 @@ class ChatRequest(BaseModel):
     """챗 요청 — 모든 엔드포인트 공통."""
 
     question: str = Field(min_length=1, max_length=2000, description="사용자 질문")
-    mode: ModeName = Field(default="hybrid", description="RAG 모드 선택")
+    mode: InputMode = Field(
+        default="auto",
+        description="RAG 모드 선택. 'auto' 면 백엔드 라우터가 결정.",
+    )
     chat_history: list[ChatMessage] = Field(
         default_factory=list,
         description="이전 대화 메시지 (멀티턴, Hybrid 모드만 활용)",

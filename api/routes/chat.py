@@ -30,6 +30,7 @@ from api.middleware.rate_limiter import limiter
 from api.middleware.token_budget import check_token_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from infra.usage_tracker import UsageTracker
+from rag_core.router import route_question
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -44,6 +45,18 @@ def _client_ip(request: Request) -> str:
     if request.client is not None:
         return request.client.host
     return "unknown"
+
+
+def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
+    """req.mode 가 'auto' 면 라우터로 결정된 모드로 갈아끼우고 반환.
+
+    Returns:
+        (resolved_req, was_auto) — was_auto 는 응답 metadata 의 auto_routed 표기에 사용.
+    """
+    if req.mode == "auto":
+        routed = route_question(req.question)
+        return req.model_copy(update={"mode": routed}), True
+    return req, False
 
 
 def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
@@ -104,6 +117,9 @@ async def chat_sync(
     # 0. Token budget cap (누적치)
     check_token_budget(stats)
 
+    # 0.5. mode='auto' 라우팅 — 사용자에게 모드 노출 X (구현 디테일 캡슐화)
+    req, was_auto = _resolve_mode(req)
+
     # 1. 입력 가드
     in_allow, in_reason, in_sanitized = check_input_guard(req.question)
     if not in_allow:
@@ -134,6 +150,8 @@ async def chat_sync(
     answer = result.get("final_answer", "")
     source_documents = result.get("source_documents", [])
     metadata = result.get("metadata", {})
+    # 라우팅 결과를 항상 metadata 에 노출 — UI 가 "(자동: Hybrid)" 표시 가능
+    metadata = {**metadata, "routed_mode": req.mode, "auto_routed": was_auto}
 
     # 3. 출력 가드
     guard_action = "allow"
@@ -255,6 +273,7 @@ async def _stream_hybrid(req: ChatRequest):
         "confidence": last_meta.get("confidence"),
         "pattern": last_meta.get("pattern", "Hybrid RAG"),
         "mode": "hybrid",
+        "routed_mode": "hybrid",  # 라우터가 hybrid 로 결정했거나 명시 hybrid
         "tokens": {
             "input": mode_stats.input_tokens if mode_stats else 0,
             "output": mode_stats.output_tokens if mode_stats else 0,
@@ -297,6 +316,9 @@ async def chat_stream(
     ip = _client_ip(request)
     stats = get_session_stats()
     check_token_budget(stats)
+
+    # mode='auto' 라우팅 — 사용자에게 모드 노출 X
+    req, _was_auto = _resolve_mode(req)
 
     # 입력 가드만 inline
     in_allow, in_reason, in_sanitized = check_input_guard(req.question)
