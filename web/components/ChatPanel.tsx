@@ -87,6 +87,8 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
     highlightedIndex?: number;
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // 진행 중 SSE / sync fetch 중단용 — 세션 전환 시 leak 방지 (W2)
+  const abortRef = useRef<AbortController | null>(null);
 
   // 모드 목록 로드 (1회)
   useEffect(() => {
@@ -95,13 +97,20 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
       .catch((e) => setError(`/modes 로드 실패: ${e.message}`));
   }, []);
 
-  // 세션 전환 시 local 상태 동기화
+  // 세션 전환 시 local 상태 동기화 + 진행 중 요청 abort (이전 세션 답변 leak 방지)
   useEffect(() => {
     setMessages(session.messages);
     setMode(session.mode);
     setInput("");
     setError(null);
     setDrawer(null);
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+        setBusy(false);
+      }
+    };
   }, [session.id]);
 
   // 새 메시지 도착 시 스크롤
@@ -139,6 +148,10 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
     setError(null);
     setBusy(true);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
     let next: SessionMessage[] = [
       ...messages,
       { role: "user", content: question },
@@ -150,7 +163,8 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
       if (mode === "hybrid") {
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
-        for await (const chunk of chatStream({ question, mode })) {
+        for await (const chunk of chatStream({ question, mode }, signal)) {
+          if (signal.aborted) return;
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
             continue;
@@ -162,6 +176,7 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
           ];
           setMessages(next);
         }
+        if (signal.aborted) return;
         next = [
           ...next.slice(0, -1),
           {
@@ -173,7 +188,8 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
         ];
         setMessages(next);
       } else {
-        const resp = await chatSync({ question, mode });
+        const resp = await chatSync({ question, mode }, signal);
+        if (signal.aborted) return;
         next = [
           ...next.slice(0, -1),
           {
@@ -185,8 +201,16 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
         ];
         setMessages(next);
       }
+      if (signal.aborted) return;
       commit(next);
     } catch (err: unknown) {
+      // 의도된 중단 (세션 전환) 은 사용자에게 노출하지 않음
+      if (
+        signal.aborted ||
+        (err instanceof DOMException && err.name === "AbortError")
+      ) {
+        return;
+      }
       const errMsg = err instanceof Error ? err.message : String(err);
       setError(errMsg);
       next = [
@@ -200,7 +224,9 @@ export function ChatPanel({ session, onUpdate }: ChatPanelProps) {
       setMessages(next);
       commit(next);
     } finally {
-      setBusy(false);
+      // 다른 호출이 abortRef 를 갈아끼우지 않은 경우에만 정리
+      if (abortRef.current === controller) abortRef.current = null;
+      if (!signal.aborted) setBusy(false);
     }
   }
 

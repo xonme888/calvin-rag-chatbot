@@ -63,11 +63,15 @@ export async function fetchModes(): Promise<ModeInfo[]> {
   return j.modes;
 }
 
-export async function chatSync(req: ChatRequest): Promise<ChatSyncResponse> {
+export async function chatSync(
+  req: ChatRequest,
+  signal?: AbortSignal,
+): Promise<ChatSyncResponse> {
   const r = await fetch(`${API_BASE}/chat/sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
+    signal,
   });
   if (!r.ok) {
     const text = await r.text();
@@ -93,7 +97,10 @@ export type ChatStreamChunk =
   | { type: "delta"; text: string }
   | { type: "meta"; meta: ChatStreamMeta };
 
-export async function* chatStream(req: ChatRequest): AsyncGenerator<ChatStreamChunk> {
+export async function* chatStream(
+  req: ChatRequest,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamChunk> {
   const r = await fetch(`${API_BASE}/chat/stream`, {
     method: "POST",
     headers: {
@@ -102,6 +109,7 @@ export async function* chatStream(req: ChatRequest): AsyncGenerator<ChatStreamCh
     },
     body: JSON.stringify(req),
     cache: "no-store",
+    signal,
   });
   if (!r.ok || !r.body) {
     const text = r.body ? await r.text() : "";
@@ -113,6 +121,10 @@ export async function* chatStream(req: ChatRequest): AsyncGenerator<ChatStreamCh
   let buffer = "";
 
   while (true) {
+    if (signal?.aborted) {
+      try { await reader.cancel(); } catch { /* abort 시 cancel 실패 무시 */ }
+      return;
+    }
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
