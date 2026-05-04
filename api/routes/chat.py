@@ -195,6 +195,7 @@ async def chat_sync(
 
     # 4. Audit log 비동기 기록
     mode_stats = stats.by_mode.get(_mode_key(req.mode))
+    user_overrode = req.previous_mode is not None and req.previous_mode != req.mode
     background.add_task(
         log_chat,
         AuditRecord(
@@ -211,6 +212,8 @@ async def chat_sync(
             trace_id=trace_id,
             routed_mode=req.mode,
             auto_routed=was_auto,
+            previous_mode=req.previous_mode,
+            user_overrode=user_overrode,
         ),
     )
     trace_event(

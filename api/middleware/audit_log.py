@@ -45,6 +45,8 @@ class AuditRecord:
     trace_id: str | None = None  # observability.LangChainTracer 와 결합용
     routed_mode: str | None = None  # 라우터가 결정한 실제 모드
     auto_routed: bool = False
+    previous_mode: str | None = None  # '다른 모드로 재시도' 직전 모드
+    user_overrode: bool = False  # 사용자가 명시적으로 다른 모드 선택했는지
     timestamp: str = field(
         default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
     )
@@ -76,6 +78,8 @@ def _ensure_schema(db_path: Path) -> None:
             ("trace_id", "TEXT"),
             ("routed_mode", "TEXT"),
             ("auto_routed", "INTEGER DEFAULT 0"),
+            ("previous_mode", "TEXT"),
+            ("user_overrode", "INTEGER DEFAULT 0"),
         ):
             try:
                 conn.execute(f"ALTER TABLE audit_log ADD COLUMN {col} {ddl}")
@@ -111,8 +115,9 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
             "(timestamp, ip, mode, question, answer_preview, "
             " tokens_in, tokens_out, cost_krw, "
             " guard_action, guard_reason, elapsed_seconds, "
-            " trace_id, routed_mode, auto_routed) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " trace_id, routed_mode, auto_routed, "
+            " previous_mode, user_overrode) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 record.timestamp,
                 record.ip,
@@ -128,6 +133,8 @@ def log_chat(record: AuditRecord, db_path: Path | None = None) -> None:
                 record.trace_id,
                 record.routed_mode,
                 1 if record.auto_routed else 0,
+                record.previous_mode,
+                1 if record.user_overrode else 0,
             ),
         )
         conn.commit()

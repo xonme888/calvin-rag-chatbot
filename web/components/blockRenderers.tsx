@@ -9,10 +9,11 @@
 
 import { type ReactNode } from "react";
 import type { Block } from "@/lib/blocks";
-import type { CitationLabel } from "@/lib/api";
+import type { CitationLabel, RagMode } from "@/lib/api";
 import { FollowupChips } from "./FollowupChips";
 import { MarkdownAnswer } from "./MarkdownAnswer";
 import { MessageHeader } from "./MessageHeader";
+import { RetryWithModeMenu } from "./RetryWithModeMenu";
 import { SourceCarousel } from "./SourceCarousel";
 import { SubgraphView } from "./SubgraphView";
 import type { SubgraphData } from "./SubgraphView";
@@ -28,6 +29,9 @@ export interface BlockContext {
   // citations block 이 본문 markdown 에서도 사용하도록 공유
   sources: string[];
   labels: Array<CitationLabel | null>;
+  // retry_menu 클릭 → 같은 질문 다른 모드로 재전송
+  onRetry: (question: string, mode: RagMode, previousMode: RagMode | null) => void;
+  pendingRetry: boolean;
 }
 
 type BlockRenderer<T extends Block["type"]> = (
@@ -87,6 +91,16 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
       questions={block.questions}
       onPick={ctx.onFollowupPick}
       disabled={ctx.pendingFollowup}
+    />
+  ),
+
+  retry_menu: (block, ctx) => (
+    <RetryWithModeMenu
+      currentMode={block.currentMode}
+      disabled={ctx.pendingRetry}
+      onRetry={(mode) =>
+        ctx.onRetry(block.previousQuestion, mode, block.currentMode)
+      }
     />
   ),
 };

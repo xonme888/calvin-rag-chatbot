@@ -10,7 +10,7 @@
  * - { type: "chart"; spec: VegaSpec }
  */
 
-import type { CitationLabel } from "./api";
+import type { CitationLabel, RagMode } from "./api";
 import type { SessionMessage } from "./sessionStore";
 
 // SubgraphData 는 컴포넌트 쪽에서 정의 — 순환 import 방지로 inline 재선언
@@ -44,7 +44,8 @@ export type Block =
       labels: Array<CitationLabel | null>;
     }
   | { type: "subgraph"; data: SubgraphPayload }
-  | { type: "followups"; questions: string[] };
+  | { type: "followups"; questions: string[] }
+  | { type: "retry_menu"; previousQuestion: string; currentMode: RagMode | null };
 
 // ====================================================================
 // 메시지 → Block[] 어댑터.
@@ -54,6 +55,8 @@ export type Block =
 interface ToBlocksOpts {
   /** 마지막 assistant 메시지인가 — followups 노출 여부에 사용. */
   isLastAssistant: boolean;
+  /** 직전 user 메시지의 question — retry_menu block 에 전달. */
+  previousUserQuestion?: string;
 }
 
 function extractSources(msg: SessionMessage): {
@@ -151,6 +154,16 @@ export function messageToBlocks(
     followups.length > 0
   ) {
     out.push({ type: "followups", questions: followups });
+  }
+
+  // '다른 모드로 재시도' — 답변 완료 시점에 노출 (마지막 답변 외에도 가능)
+  if (!msg.streaming && opts.previousUserQuestion) {
+    const { routedMode } = extractRoutedMode(msg);
+    out.push({
+      type: "retry_menu",
+      previousQuestion: opts.previousUserQuestion,
+      currentMode: (routedMode as RagMode | null) ?? null,
+    });
   }
 
   return out;

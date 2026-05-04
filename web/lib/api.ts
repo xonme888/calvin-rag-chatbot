@@ -19,6 +19,7 @@ export interface ChatRequest {
   mode: Mode;
   chat_history?: ChatMessage[];
   dense_weight?: number;
+  previous_mode?: RagMode; // '다른 모드로 재시도' 시 직전 라우팅 모드
 }
 
 // 단일 페이지 인용 라벨 — 백엔드 rag_core/citation_label.CitationLabel 와 동기화

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes } from "@/lib/api";
-import type { ChatStreamMeta, Mode, ModeInfo } from "@/lib/api";
+import type { ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
 import { messageToBlocks } from "@/lib/blocks";
 import {
   deriveTitle,
@@ -100,12 +100,16 @@ export function ChatPanel({
     await sendQuestion(question);
   }
 
-  async function sendQuestion(question: string) {
+  async function sendQuestion(
+    question: string,
+    opts?: { mode?: Mode; previousMode?: RagMode | null },
+  ) {
     if (isPending) return;
     setError(null);
 
     const startedSessionId = session.id;
-    const startMode = mode;
+    const startMode: Mode = opts?.mode ?? mode;
+    const previousMode = opts?.previousMode ?? null;
     markPending(startedSessionId, true);
 
     let next: SessionMessage[] = [
@@ -125,7 +129,11 @@ export function ChatPanel({
         // 결정하면 sync replay 로 자연스럽게 처리됨.
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
-        for await (const chunk of chatStream({ question, mode: startMode })) {
+        for await (const chunk of chatStream({
+          question,
+          mode: startMode,
+          previous_mode: previousMode ?? undefined,
+        })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
             continue;
@@ -151,7 +159,11 @@ export function ChatPanel({
           title: deriveTitle(next),
         });
       } else {
-        const resp = await chatSync({ question, mode: startMode });
+        const resp = await chatSync({
+          question,
+          mode: startMode,
+          previous_mode: previousMode ?? undefined,
+        });
         next = [
           ...next.slice(0, -1),
           {
@@ -226,6 +238,11 @@ export function ChatPanel({
           const isLastAssistant =
             isAssistantMsg && i === messages.length - 1 && !m.streaming;
           const { sources, labels } = getSourcesFromMessage(m);
+          // assistant 메시지의 직전 user 메시지를 retry_menu 에 전달
+          const previousUserQuestion =
+            isAssistantMsg && i > 0 && messages[i - 1]?.role === "user"
+              ? messages[i - 1].content
+              : undefined;
 
           const buildItems = (): SourceItem[] =>
             sources.map((content, idx) => ({
@@ -249,11 +266,17 @@ export function ChatPanel({
               }
               setDrawer({ items: buildItems(), highlightedIndex: hi });
             },
-            onFollowupPick: sendQuestion,
+            onFollowupPick: (q) => sendQuestion(q),
             pendingFollowup: isPending,
+            onRetry: (q, retryMode, prevMode) =>
+              sendQuestion(q, { mode: retryMode, previousMode: prevMode }),
+            pendingRetry: isPending,
           };
 
-          const blocks = messageToBlocks(m, { isLastAssistant });
+          const blocks = messageToBlocks(m, {
+            isLastAssistant,
+            previousUserQuestion,
+          });
 
           return (
             <div
