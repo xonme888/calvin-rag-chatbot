@@ -25,8 +25,9 @@ from api.dependencies import (
 )
 from api.middleware.audit_log import AuditRecord, log_chat
 from api.middleware.rate_limiter import limiter
-from api.middleware.token_budget import check_token_budget
+from api.middleware.token_budget import check_token_budget, check_user_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
+from infra.budget import budget_key, record_usage
 from infra.circuit_breaker import CircuitOpenError, get_breaker
 from infra.observability import (
     LangChainTracer,
@@ -118,7 +119,14 @@ def _invoke_sync(
             )
         return breaker.call(rag.query, req.question, callbacks=callbacks)
     except CircuitOpenError as e:
+        from infra.alerting import Level, alert
+
         trace_event("circuit.open", mode=req.mode, message=str(e))
+        alert(
+            Level.ERROR,
+            f"Mode '{req.mode}' circuit open",
+            {"mode": req.mode, "label": entry.label},
+        )
         raise HTTPException(
             status_code=503,
             detail=f"{entry.label} 일시 차단 — 30초 후 자동 복구 시도",
@@ -150,8 +158,9 @@ async def chat_sync(
         client_mode=req.mode,
     )
 
-    # 0. Token budget cap (누적치)
+    # 0. Token budget cap — 전역 + 사용자/IP 단위 (PRD-4)
     check_token_budget(stats)
+    check_user_budget(user_id=None, ip=ip, role="free")  # PRD-2 후 user_id/role 주입
 
     # 0.5. mode='auto' 라우팅 — 사용자에게 모드 노출 X (구현 디테일 캡슐화)
     req, was_auto = _resolve_mode(req)
@@ -205,8 +214,15 @@ async def chat_sync(
         answer = out_sanitized
         metadata = {**metadata, "guard_sanitized": True, "guard_reason": out_reason}
 
-    # 4. Audit log 비동기 기록
+    # 4. 사용자별 budget 기록 (PRD-4) + Audit log 비동기 기록
     mode_stats = stats.by_mode.get(_mode_key(req.mode))
+    if mode_stats:
+        record_usage(
+            budget_key(user_id=None, ip=ip),
+            tokens_in=mode_stats.input_tokens,
+            tokens_out=mode_stats.output_tokens,
+            cost_krw=mode_stats.cost_krw,
+        )
     user_overrode = req.previous_mode is not None and req.previous_mode != req.mode
     background.add_task(
         log_chat,
