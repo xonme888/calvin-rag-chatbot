@@ -1,5 +1,6 @@
 "use client";
 
+import { get as idbGet, set as idbSet } from "idb-keyval";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ChatStreamMeta, ChatSyncResponse, Mode } from "./api";
@@ -103,36 +104,61 @@ export function useSessions(): UseSessionsResult {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [ready, setReady] = useState(false);
 
-  // mount 후 localStorage 로딩 (SSR/CSR mismatch 회피)
+  // mount 후 IndexedDB 로딩 (SSR/CSR mismatch 회피, async)
+  // 첫 호출 시 localStorage 잔존 데이터를 IndexedDB 로 자동 마이그레이션
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const loaded = safeParse<ChatSession[]>(
-      localStorage.getItem(KEY_SESSIONS),
-      [],
-    );
-    const storedActive = localStorage.getItem(KEY_ACTIVE);
+    let cancelled = false;
+    (async () => {
+      let loaded: ChatSession[] | undefined = await idbGet(KEY_SESSIONS);
+      let storedActive: string | undefined = await idbGet(KEY_ACTIVE);
 
-    if (loaded.length === 0) {
-      const fresh = newSession();
-      setSessions([fresh]);
-      setActiveId(fresh.id);
-    } else {
-      setSessions(loaded);
-      const matched = loaded.find((s) => s.id === storedActive);
-      setActiveId(matched ? matched.id : loaded[0].id);
-    }
-    setReady(true);
+      // localStorage → IndexedDB 마이그레이션 (한 번만)
+      if (!loaded) {
+        const lsRaw = localStorage.getItem(KEY_SESSIONS);
+        if (lsRaw) {
+          const fromLs = safeParse<ChatSession[]>(lsRaw, []);
+          if (fromLs.length > 0) {
+            await idbSet(KEY_SESSIONS, fromLs);
+            loaded = fromLs;
+            const lsActive = localStorage.getItem(KEY_ACTIVE);
+            if (lsActive) {
+              await idbSet(KEY_ACTIVE, lsActive);
+              storedActive = lsActive;
+            }
+            // localStorage 정리 — 향후 IndexedDB 가 단일 진실 소스
+            localStorage.removeItem(KEY_SESSIONS);
+            localStorage.removeItem(KEY_ACTIVE);
+          }
+        }
+      }
+      if (cancelled) return;
+
+      if (!loaded || loaded.length === 0) {
+        const fresh = newSession();
+        setSessions([fresh]);
+        setActiveId(fresh.id);
+      } else {
+        setSessions(loaded);
+        const matched = loaded.find((s) => s.id === storedActive);
+        setActiveId(matched ? matched.id : loaded[0].id);
+      }
+      setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // sessions 변경 시 영속화
+  // sessions 변경 시 영속화 (비동기, fire-and-forget)
   useEffect(() => {
     if (!ready || typeof window === "undefined") return;
-    localStorage.setItem(KEY_SESSIONS, JSON.stringify(sessions));
+    void idbSet(KEY_SESSIONS, sessions);
   }, [sessions, ready]);
 
   useEffect(() => {
     if (!ready || !activeId || typeof window === "undefined") return;
-    localStorage.setItem(KEY_ACTIVE, activeId);
+    void idbSet(KEY_ACTIVE, activeId);
   }, [activeId, ready]);
 
   const active = sessions.find((s) => s.id === activeId) ?? null;

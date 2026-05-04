@@ -83,7 +83,20 @@ export function AboutModal({ open, onClose }: Props) {
           </section>
 
           <section className="text-xs text-slate-500 pt-2 border-t border-slate-200">
-            출처는 답변 위 카드와 본문 안 [N] 마커로 함께 제공됩니다.
+            <p className="mb-2">
+              출처는 답변 위 카드와 본문 안 [N] 마커로 함께 제공됩니다.
+            </p>
+            <nav className="flex gap-3 text-[11px]">
+              <a href="/terms" target="_blank" rel="noreferrer" className="hover:text-primary">
+                서비스 약관
+              </a>
+              <a href="/privacy" target="_blank" rel="noreferrer" className="hover:text-primary">
+                개인정보 처리방침
+              </a>
+              <a href="/license" target="_blank" rel="noreferrer" className="hover:text-primary">
+                데이터 출처
+              </a>
+            </nav>
           </section>
         </div>
       </div>
