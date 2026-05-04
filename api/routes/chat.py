@@ -387,6 +387,11 @@ def _build_stream_meta_payload(
         "tool_calls": result_metadata.get("tool_calls", []),
         "tool_call_count": result_metadata.get("tool_call_count"),
         "suggested_followups": result_metadata.get("suggested_followups", []),
+        "cache_hits": result_metadata.get("cache_hits", 0),
+        "cache_misses": result_metadata.get("cache_misses", 0),
+        "cache_total": result_metadata.get("cache_total", 0),
+        "cache_hit_rate": result_metadata.get("cache_hit_rate", 0.0),
+        "from_cache": result_metadata.get("from_cache", False),
         "tokens": {
             "input": mode_stats.input_tokens if mode_stats else 0,
             "output": mode_stats.output_tokens if mode_stats else 0,

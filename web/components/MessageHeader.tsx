@@ -1,5 +1,6 @@
 "use client";
 
+import { Database, Zap } from "lucide-react";
 import type { ChatStreamMeta, ChatSyncResponse, Mode } from "@/lib/api";
 
 interface Props {
@@ -53,6 +54,20 @@ export function MessageHeader({ mode, syncMeta, streamMeta }: Props) {
   const toolCallCount =
     (syncMeta?.metadata.tool_call_count as number | undefined) ?? null;
 
+  // LLM 캐시 통계 — sync/stream 양쪽
+  const cacheTotal =
+    (syncMeta?.metadata.cache_total as number | undefined) ??
+    streamMeta?.cache_total ??
+    0;
+  const cacheHits =
+    (syncMeta?.metadata.cache_hits as number | undefined) ??
+    streamMeta?.cache_hits ??
+    0;
+  const fromCache =
+    (syncMeta?.metadata.from_cache as boolean | undefined) ??
+    streamMeta?.from_cache ??
+    false;
+
   const items: Array<{ label: string; value: string }> = [];
   if (elapsed != null) {
     items.push({ label: "응답", value: `${elapsed.toFixed(2)}초` });
@@ -73,7 +88,23 @@ export function MessageHeader({ mode, syncMeta, streamMeta }: Props) {
     items.push({ label: "도구", value: `${toolCallCount}회` });
   }
 
-  if (items.length === 0) return null;
+  // 캐시 배지 (별도) — LLM 호출이 1회 이상 있었을 때만
+  let cacheBadge: { label: string; tone: "cache" | "fresh"; icon: typeof Database } | null = null;
+  if (cacheTotal > 0) {
+    if (fromCache) {
+      cacheBadge = { label: "캐시", tone: "cache", icon: Database };
+    } else if (cacheHits > 0) {
+      cacheBadge = {
+        label: `캐시 ${cacheHits}/${cacheTotal}`,
+        tone: "cache",
+        icon: Database,
+      };
+    } else {
+      cacheBadge = { label: "신규", tone: "fresh", icon: Zap };
+    }
+  }
+
+  if (items.length === 0 && !cacheBadge) return null;
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
@@ -86,6 +117,24 @@ export function MessageHeader({ mode, syncMeta, streamMeta }: Props) {
           )}
         </span>
       ))}
+      {cacheBadge && (
+        <span
+          className={[
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ml-auto",
+            cacheBadge.tone === "cache"
+              ? "bg-sky-50 text-sky-700 border border-sky-200"
+              : "bg-amber-50 text-amber-700 border border-amber-200",
+          ].join(" ")}
+          title={
+            cacheBadge.tone === "cache"
+              ? "LLM 캐시에서 응답 — 추가 토큰 비용 0"
+              : "새로 LLM 호출됨 (캐시 miss)"
+          }
+        >
+          <cacheBadge.icon size={10} />
+          {cacheBadge.label}
+        </span>
+      )}
     </div>
   );
 }

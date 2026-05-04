@@ -53,6 +53,12 @@ export interface ChatStreamMeta {
   // Agentic 모드 — 도구 호출 정보
   tool_calls?: Array<Record<string, unknown>>;
   tool_call_count?: number;
+  // LLM 캐시 통계 — 답변이 캐시에서 왔는지 표시
+  cache_hits?: number;
+  cache_misses?: number;
+  cache_total?: number;
+  cache_hit_rate?: number;
+  from_cache?: boolean; // 모든 LLM 호출이 캐시 hit 이면 true
 }
 
 export interface ChatSyncResponse {

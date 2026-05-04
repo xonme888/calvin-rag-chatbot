@@ -175,7 +175,10 @@ class KnowledgeGraphRAG:
                 },
             }
         """
+        from infra.llm_cache import cache_snapshot
+
         start = time.time()
+        cache_start = cache_snapshot()
 
         invoke_config: dict[str, Any] = {}
         if callbacks:
@@ -214,6 +217,7 @@ class KnowledgeGraphRAG:
 
         elapsed = time.time() - start
 
+        from infra.llm_cache import cache_delta
         from rag_core.citation_label import labels_for_pages
         from rag_core.followup import generate_followups
 
@@ -236,6 +240,7 @@ class KnowledgeGraphRAG:
                 "source_pages_label": labels_for_pages(source_pages),
                 "tool_calls": [],
                 "suggested_followups": generate_followups(question, answer, self.llm),
+                **cache_delta(cache_start),
             },
         }
 

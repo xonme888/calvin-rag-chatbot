@@ -452,6 +452,9 @@ class HybridRAG:
                              is_grounded, ...},
             }
         """
+        from infra.llm_cache import cache_delta, cache_snapshot
+
+        cache_start = cache_snapshot()
         initial_state: HybridRAGState = {"question": question}
         if chat_history:
             initial_state["chat_history"] = chat_history
@@ -468,6 +471,8 @@ class HybridRAG:
             metadata["grade_reason"] = final_state.get("grade_reason")
             metadata["self_rag_attempts"] = final_state.get("retry_count", 0) + 1
             metadata["rewritten_question"] = final_state.get("rewritten_question")
+
+        metadata.update(cache_delta(cache_start))
 
         return {
             "final_answer": final_state.get("answer", ""),
@@ -492,8 +497,11 @@ class HybridRAG:
 
         Stream 종료 후 메타데이터는 ``self._last_metadata``에 저장된다.
         """
+        from infra.llm_cache import cache_delta, cache_snapshot
+
         self._last_metadata = None
         start = time.time()
+        cache_start = cache_snapshot()
 
         # 1. 검색 (retriever에 위임)
         bm25_results, dense_results, fused = self.retriever.retrieve_split(  # type: ignore[union-attr]
@@ -564,6 +572,7 @@ class HybridRAG:
             "tool_calls": [],
             "subgraph": None,
             "suggested_followups": generate_followups(question, answer_text, self.llm),
+            **cache_delta(cache_start),
         }
 
 

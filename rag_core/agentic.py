@@ -21,10 +21,8 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Iterator
 
 from langchain.agents import create_agent
-from langchain_core.caches import InMemoryCache
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.documents import Document
-from langchain_core.globals import set_llm_cache
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool, tool
@@ -117,31 +115,9 @@ def message_to_stream_events(msg: BaseMessage) -> Iterator[dict[str, Any]]:
         }
 
 
-class TrackedInMemoryCache(InMemoryCache):
-    """``InMemoryCache``를 확장해 lookup 시 hit/miss 카운트를 누적한다.
-
-    LangChain LLM은 cache 사용 시 매 호출마다 ``lookup(prompt, llm_string)``을
-    호출한다. None 반환은 cache miss(LLM 호출), 값 반환은 cache hit.
-    이 카운터를 metadata에 노출해 시연 시 캐시 효율을 직접 보여줄 수 있다.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.hits: int = 0
-        self.misses: int = 0
-
-    def lookup(self, prompt: str, llm_string: str) -> Any:
-        result = super().lookup(prompt, llm_string)
-        if result is None:
-            self.misses += 1
-        else:
-            self.hits += 1
-        return result
-
-    def reset(self) -> None:
-        """카운트만 0으로 초기화. 캐시 데이터는 보존."""
-        self.hits = 0
-        self.misses = 0
+# TrackedInMemoryCache 는 infra/llm_cache.py 로 이동 — 3 모드 공유 싱글톤.
+# 하위 호환을 위해 alias 유지.
+from infra.llm_cache import TrackedInMemoryCache  # noqa: F401
 
 
 class LLMCallTracker(BaseCallbackHandler):
@@ -229,11 +205,12 @@ class AgenticRAG:
         """
         self.config: AgenticRAGConfig = config or AgenticRAGConfig()
 
-        # LLM Cache (전역). hit/miss 카운트 노출 가능.
+        # LLM Cache (전역 싱글톤). 3 모드가 같은 인스턴스 공유 — infra.llm_cache 참조.
         self._tracked_cache: TrackedInMemoryCache | None = None
         if self.config.enable_llm_cache:
-            self._tracked_cache = TrackedInMemoryCache()
-            set_llm_cache(self._tracked_cache)
+            from infra.llm_cache import get_tracked_cache
+
+            self._tracked_cache = get_tracked_cache()
 
         self._llm_tracker: LLMCallTracker = LLMCallTracker()
 
