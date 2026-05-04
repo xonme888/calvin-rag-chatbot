@@ -214,8 +214,12 @@ class KnowledgeGraphRAG:
 
         elapsed = time.time() - start
 
+        from rag_core.citation_label import labels_for_pages
         from rag_core.followup import generate_followups
 
+        source_pages: list[int | None] = [
+            d.metadata.get("page") for d in top_docs
+        ]
         return {
             "final_answer": answer,
             "source_documents": [d.page_content for d in top_docs],
@@ -228,7 +232,9 @@ class KnowledgeGraphRAG:
                 "graph_edge_count": len(subgraph.edges),
                 "vector_count": len(top_docs),
                 "elapsed_seconds": elapsed,
-                "source_pages": [d.metadata.get("page") for d in top_docs],
+                "source_pages": source_pages,
+                "source_pages_label": labels_for_pages(source_pages),
+                "tool_calls": [],
                 "suggested_followups": generate_followups(question, answer, self.llm),
             },
         }

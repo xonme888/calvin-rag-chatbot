@@ -273,6 +273,8 @@ class HybridRAG:
             "confidence": response.confidence,
             "cited_pages": response.cited_pages,
             "is_grounded": None,  # Self-RAG에서 채워짐
+            "tool_calls": [],
+            "subgraph": None,
             "suggested_followups": generate_followups(question, answer, self.llm),
         }
 
@@ -559,6 +561,8 @@ class HybridRAG:
             "confidence": None,
             "cited_pages": cited_pages,
             "is_grounded": None,
+            "tool_calls": [],
+            "subgraph": None,
             "suggested_followups": generate_followups(question, answer_text, self.llm),
         }
 

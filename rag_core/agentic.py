@@ -333,6 +333,9 @@ class AgenticRAG:
 
         from rag_core.followup import generate_followups
 
+        # envelope 표준화: 3 모드가 같은 키 셋. agentic 은 source_pages 가 도구
+        # 결과에서 안 나오므로 None 으로 채운다 — 프론트가 빈 배열로 폴백 가능.
+        source_pages: list[int | None] = [None] * len(parsed.source_documents)
         return {
             "final_answer": parsed.final_answer,
             "source_documents": parsed.source_documents,
@@ -346,6 +349,9 @@ class AgenticRAG:
                 "cache_hit_rate": round(cache_hit_rate, 3),
                 "llm_calls": llm_calls,
                 "model": self.config.openai_model,
+                "source_pages": source_pages,
+                "source_pages_label": [None] * len(source_pages),
+                "subgraph": None,
                 "suggested_followups": generate_followups(
                     question, parsed.final_answer, self.llm
                 ),
