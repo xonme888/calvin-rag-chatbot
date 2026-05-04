@@ -35,6 +35,11 @@ related_prd: docs/prd/draft/002-multi-device-sync.md
 - `api/routes/chat.py:45~52 _client_ip` — IP 만으로 식별.
 - audit_log (`api/middleware/audit_log.py:31~50`) 에 `user_id` 컬럼 없음.
 - 결정 사항 #33 (Cloudflare Access JWT) pending — 본 TRD 가 대체/보완.
+- audit_log SQLite (`_DEFAULT_DB_PATH = ~/.calvin-rag-chatbot/audit.db`, line 21) 는
+  단일 인스턴스 가정. TRD-004 의 사용자별 budget 도입 + 다중 워커/Pod 운영 단계에서
+  파일 락 경합과 통계 분산이 발생하므로 함께 PostgreSQL 로 이전한다 (Supabase
+  자체 Postgres 재사용 또는 별도 인스턴스). 본 TRD 의 C4 audit_log ALTER 작업과
+  마이그레이션 시점을 조율한다.
 
 ### 1.3 한계 / 변경 비용 / 회귀 위험
 
@@ -136,6 +141,15 @@ create policy "own sessions" on public.chat_sessions
 
 `messages: jsonb` 는 현재 `SessionMessage` 구조 (line 21~28) 와 동형. `attachments` 도 jsonb 안에 자연 수용.
 
+**JSONB 인덱싱 / 미래 분리**:
+- `messages` jsonb 는 1년 운영 시 세션당 100~200 메시지 가능 — 평균 row 크기 100~500KB 도달.
+- 현 단계: `(user_id, updated_at desc)` 인덱스로 충분.
+- 임계 도달 시 (단일 row 1MB 또는 검색 요구): `chat_messages` 테이블로 분리하는 ADR
+  작성 (`docs/me/00X-chat-messages-split.md`). 분리 마이그레이션은 `messages jsonb` →
+  `(session_id, ord int, content jsonb)` 로 변환 — 비파괴 롤백 가능 (jsonb 컬럼 유지하며 grace).
+- 검색 요구 시점에 GIN 인덱스 (`CREATE INDEX ON chat_sessions USING gin (messages)`) 도
+  옵션이지만 분리가 우선.
+
 ### 2.4 의존성 방향
 
 ```
@@ -156,6 +170,10 @@ api/routes/chat.py → api/middleware/auth.py → infra/supabase_client.py → p
 - 위 SQL 적용, RLS enable 확인
 - `.env.example` 에 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` 추가
 - 검증: SQL editor 에서 anon 키로 read 시 RLS 차단 확인
+- RLS 정책은 함수로 분리 작성: `CREATE FUNCTION can_access_session(uid uuid) RETURNS boolean
+  AS $$ SELECT auth.uid() = uid OR is_admin() $$ LANGUAGE sql STABLE;` 형태.
+  정책 본문은 `USING (can_access_session(user_id))` 로 단순화 — 추후 admin/team 역할
+  추가 시 함수만 수정하면 무중단 갱신 가능. `is_admin()` 은 `auth.jwt() ->> 'role' = 'admin'`.
 
 ### C2. 프론트 인증 골격 (백엔드 무영향)
 
@@ -193,6 +211,10 @@ const flushPending = debounce(async (session: ChatSession) => {
 
 - 변경: `api/main.py:45` `allow_origins=["*"]` → `[FRONTEND_URL]` (env 기반)
 - 검증: 다른 origin 에서 요청 차단
+- 주의: `api/main.py:46 allow_credentials=True` 와 `allow_origins=["*"]` 조합은
+  브라우저 (Chrome/Safari/Firefox) 가 차단한다 — `*` 와 credentials 는 명세상 동시
+  허용 불가. 따라서 wildcard 제거 + 명시 origin 리스트가 필수. preview 배포는
+  `FRONTEND_URL_PATTERN` 정규식 (예: `^https:\/\/.*\.vercel\.app$`) 으로 동적 매칭.
 
 ### C6. 데이터 마이그레이션 (선택)
 
@@ -267,6 +289,7 @@ test("로그인 후 sessions 가 supabase 에서 로드된다", async () => {
 | Magic Link 이메일 도달 실패 | 로그인 불가 | Supabase 의 SMTP 대체 옵션 + 사용자 안내 |
 | JWKS endpoint 다운 | 401 폭주 | JWKS 1시간 캐시 + stale-while-revalidate |
 | Realtime 구독 비용 | 동시 접속 폭증 시 비용 증가 | Polling 모드 fallback |
+| Supabase Auth 다운 (장애 / 정전) | 신규 로그인 불가 + 토큰 갱신 실패 | 캐시된 JWT 사용자는 만료 시점까지 1시간 grace (서비스 사용 가능), 메인 화면 상단에 "로그인 시스템 일시 장애 — 1시간 내 복구 시 자동 재개" 배너 노출. 신규 사용자는 명시적 안내 페이지로 redirect. |
 
 ## 7. 비-목표 / TRD 범위 외
 

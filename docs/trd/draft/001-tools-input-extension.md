@@ -50,10 +50,15 @@ rag_core/
   tool_registry.py          신규 — 도구 등록/조회 단일 진입점
   tools/
     __init__.py             신규 — 기본 도구 (search_documents) 등록
+    _policy.py              신규 — 도구별 timeout/budget/role 메타데이터 (별도 모듈로 격리)
     search_documents.py     이전 — agentic._make_search_tool 의 클로저를 함수로 외부화
     mcp_adapter.py          신규 — MCP 서버 → BaseTool 변환
     vision_describe.py      신규 — 이미지 묘사 도구 (선택, PRD 결정 후)
 ```
+
+`_policy.py` 는 도구별 (timeout_s, max_tokens, allowed_roles) 메타를 단일 dict 로 보관해
+도구 코드와 권한 정책을 분리한다. registry 등록 시 정책을 같이 주입하고, `_invoke_sync`
+가 호출 직전에 enforce.
 
 ### 2.2 인터페이스 (Python sketch)
 
@@ -145,6 +150,8 @@ rag_core/agentic.py  →  rag_core/tool_registry.py  ←  rag_core/tools/*.py
 - 변경: `api/main.py` 또는 별도 `bootstrap.py` 에서 `register("mcp_search", lambda: load_mcp_tools(...))`
 - 환경변수: `MCP_SERVERS=url1,url2` 같은 형태
 - 검증: MCP 서버 mock + tool_call 1회 PASS
+- 검증 추가: 악성 MCP mock (무한 결과 반환, 1MB 응답, 초과 timeout) 으로 `_policy` 의
+  timeout/max_tokens 강제 차단 PASS — 도구 misbehavior 가 Agent 본체를 막지 않아야 함
 
 ### C3. ChatRequest.attachments 스키마 (이미지 진입)
 
@@ -217,6 +224,7 @@ def test_agentic_loads_tools_from_registry(reset_registry):
 | 이미지 첨부 → 토큰 폭증 | 비용 | Vision 호출 시 별도 token budget 분리 |
 | `langchain-mcp-adapters` 라이브러리 정착 미흡 | 직접 구현 필요 | C2 를 옵셔널로 분리, 직접 구현 fallback 인터페이스 동일 |
 | Tool registry 등록 순서 의존 | 테스트 격리 실패 | `reset()` 헬퍼 (mode_registry 의 line 57~59 패턴) |
+| MCP description prompt injection — 외부 도구의 description/schema 가 system prompt 에 합쳐져 LLM 동작 변조 | jailbreak / 무관 도구 호출 강제 | 도구 description 을 system prompt 가 아닌 별도 message (HumanMessage 또는 ToolDefinition 블록) 로 격리하거나, LLM 호출 직전 `mcp_adapter` 에서 sanitize (`["Ignore previous", "system:"]` 패턴 제거 + 길이 cap). MCP 서버 화이트리스트 ENV 로 관리. |
 
 ## 7. 비-목표 / TRD 범위 외
 

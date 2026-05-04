@@ -28,6 +28,7 @@ created: 2026-05-04
 - 이미지 생성. 입력만 허용하고 모델이 그림을 만들어주는 시나리오는 제외.
 - 음성/비디오 입력. 별도 PRD.
 - 도구별 RAGAS 평가 — `experiments/eval/` 의 4지표 파이프라인은 텍스트 응답을 가정한다. 도구 결과 평가 지표는 후속 작업.
+- Vision 도구는 본 PRD 의 1순위가 아니다 — PRD-2 (인증) + PRD-4 (사용자별 cap) 도입 후로 게이팅. 인증 없는 vision 은 비용 폭주 위험이 가장 큰 도구이므로 quota 인프라가 선행되어야 한다.
 
 ## 4. 사용자 시나리오 / BDD
 
@@ -78,6 +79,10 @@ created: 2026-05-04
 - Agentic 모드 답변 카드에 "도구 호출 (N)" 토글이 표시되고, 펼치면 호출 순서대로 행이 나열된다.
 - 등록된 도구 목록은 `/api/health` 또는 `/api/modes` 응답에 노출된다 (운영자 가시성).
 - 도구 추가/제거가 `mode_registry.py` 와 동일한 Registry 패턴 ("한 곳에서 선언") 으로 가능하다.
+- MCP 서버 등록은 환경변수 `MCP_ALLOWED_SERVERS` allowlist 만 허용한다 — 임의 MCP URL 주입을 LLM 이 도구 인자로 시도하더라도 등록되지 않은 서버는 호출 불가.
+- 도구 description / schema 는 시스템 prompt 와 분리된 별도 message 영역 (LangChain `tools` 인자) 으로만 LLM 에 노출 — 사용자 입력이 도구 description 자리에 끼어들 수 없도록 격리.
+- 도구별 per-call timeout (기본 10초) 및 호출당 토큰 cap (기본 입력 2,000 / 출력 4,000) 을 registry 메타데이터로 선언. 한 도구가 LLM context 를 폭주시키는 것을 차단.
+- 외부 API 가 timeout / 5xx 로 응답하면 PRD-4 의 circuit breaker 가 30초 내 fallback 모드 전환을 트리거 — 본 PRD 는 도구 실패를 trace event 로 emit 만 하고 차단 정책은 PRD-4 에 위임.
 
 ## 7. 성공 지표 (정량)
 
@@ -85,6 +90,7 @@ created: 2026-05-04
 - Reasoning trace 펼침으로 모든 Agentic 답변에 호출 내역이 100% 노출 (답변 후 trace 비어 있음 0건).
 - 이미지 첨부 질의 5건 시범 시, 4건 이상에서 vision 응답이 본문에 맥락 있게 인용됨 (수동 평가).
 - 도구 호출 평균 응답 시간 증가가 기존 Agentic 대비 +30% 이내 (외부 API latency 포함).
+- 도구 호출 실패율 < 1% (5분 평균). 외부 API circuit open 시 30초 내 fallback 모드 전환 (PRD-4 의 breaker 임계와 동일).
 
 ## 8. 의존 / 영향 / 회귀 위험
 

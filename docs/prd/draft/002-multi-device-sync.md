@@ -16,6 +16,8 @@ created: 2026-05-04
 
 이 PRD 는 외부 노출/배포 자체는 다루지 않는다. 인증/동기화의 **데이터·인터페이스 모양** 만 정한다 (배포는 별도).
 
+ADR 한 줄: 본 PRD 는 의도적 vendor lock-in (Supabase Auth + Postgres + Realtime) 을 선택한다. 팀 규모 1~3명 가정에서는 운영 단순성이 향후 마이그레이션 옵션성보다 우선한다 — 인증 / DB / 실시간 동기화 / Storage 가 한 콘솔에서 묶이는 가치가 vendor 분리 비용을 능가하는 경우.
+
 ## 2. 목표
 
 - 한 사용자가 여러 디바이스에서 로그인했을 때 같은 대화 목록과 같은 메시지 본문을 본다.
@@ -28,6 +30,8 @@ created: 2026-05-04
 - 서버에서 답변을 다시 생성 후 "이어쓰기" 하는 시나리오 (디바이스 전환 중 진행 중인 SSE 스트림 인계). `pendingIds` 는 메모리만 유지하고, 디바이스 전환 시 진행 중 답변은 끊는다.
 - Encryption-at-rest 정책 / 백업 전략. TRD 또는 별도 PRD.
 - Streamlit 레거시 측 동기화 — 이 PRD 는 Next.js 경로만.
+- GDPR/PIPA 사용자 권리 (삭제/익스포트), PII redaction, 약관/저작권 페이지, audit_log 보존 정책 — 본 PRD 외. PRD-5 (데이터 거버넌스) 가 cascade 책임을 진다. 본 PRD 는 `user_id` schema 와 RLS 정책만 정의하고, 그 위에 cascade 가 얹힌다.
+- 사용자별 quota / cost cap — 본 PRD 외. PRD-4 (운영 안전망) 가 책임. 본 PRD 는 `user_id` 가 request 에 들어오는 흐름을 만들고, PRD-4 가 그 키로 quota 를 건다.
 
 ## 4. 사용자 시나리오 / BDD
 
@@ -72,6 +76,8 @@ created: 2026-05-04
 
 옵션은 단일 PRD 안에서 합의 — last-write-wins (서버 timestamp 기준) + 충돌 시 사용자 토스트. CRDT 등 본격 머지는 비-목표. ★ 채택.
 
+단일 디바이스 다탭 (브라우저 탭 2개에서 같은 세션 동시 편집) 도 같은 정책을 적용한다 — Realtime 메시지 수신 시 local override (메시지 store 가 서버 timestamp 기준으로 정렬 후 last-write-wins). BroadcastChannel 기반 탭 간 잠금은 비-목표 — Realtime 단일 경로로 충돌을 자동 해소한다.
+
 ## 6. 기능 요건
 
 - 로그인/로그아웃 UI (헤더 우측). 미로그인 상태에서 사이드바는 익명 세션만 노출.
@@ -80,6 +86,7 @@ created: 2026-05-04
 - 로그인 시점에 익명 localStorage 세션을 사용자 계정으로 "병합" 할지 묻는 1회성 다이얼로그 (Yes/No).
 - 환경 플래그 `AUTH_ENABLED` — `false` 면 모든 인증/서버 동기화 우회 (dev/시연용).
 - 로그인 사용자의 trace event 에 `user_id` (해시) 포함 — `infra/observability.py` 의 trace event 확장.
+- `role` 컬럼 (`free` | `paid` | `admin`) 을 `auth.users.user_metadata.role` 에 박는다. RLS 정책은 SECURITY DEFINER 함수 (`auth.uid() = user_id OR is_admin()`) 로 추출 — 향후 `enterprise` / `viewer` 등 role 추가 시 모든 테이블 정책을 재작성할 필요 없이 함수 한 곳만 수정. PRD-4 의 quota 키도 이 role 을 참조한다.
 
 ## 7. 성공 지표 (정량)
 
