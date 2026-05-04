@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes, generateAutoTitle } from "@/lib/api";
-import type { ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
+import type { Attachment, ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
+import { AttachmentInput } from "./AttachmentInput";
 import { messageToBlocks } from "@/lib/blocks";
 import {
   deriveTitle,
@@ -58,6 +59,7 @@ export function ChatPanel({
   const messages = session.messages; // session 이 단일 진실 소스
   const [mode, setModeLocal] = useState<Mode>(session.mode);
   const [input, setInput] = useState("");
+  const [draftAttachments, setDraftAttachments] = useState<Attachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [drawer, setDrawer] = useState<{
@@ -75,6 +77,7 @@ export function ChatPanel({
   useEffect(() => {
     setModeLocal(session.mode);
     setInput("");
+    setDraftAttachments([]);
     setError(null);
     setDrawer(null);
   }, [session.id, session.mode]);
@@ -96,13 +99,19 @@ export function ChatPanel({
     e.preventDefault();
     if (!input.trim() || isPending) return;
     const question = input.trim();
+    const sentAttachments = draftAttachments;
     setInput("");
-    await sendQuestion(question);
+    setDraftAttachments([]);
+    await sendQuestion(question, { attachments: sentAttachments });
   }
 
   async function sendQuestion(
     question: string,
-    opts?: { mode?: Mode; previousMode?: RagMode | null },
+    opts?: {
+      mode?: Mode;
+      previousMode?: RagMode | null;
+      attachments?: Attachment[];
+    },
   ) {
     if (isPending) return;
     setError(null);
@@ -110,6 +119,7 @@ export function ChatPanel({
     const startedSessionId = session.id;
     const startMode: Mode = opts?.mode ?? mode;
     const previousMode = opts?.previousMode ?? null;
+    const attachments = opts?.attachments ?? [];
     markPending(startedSessionId, true);
 
     // 첫 답변 여부 — 자동 제목 LLM 호출 트리거 (재시도일 때는 false)
@@ -117,7 +127,11 @@ export function ChatPanel({
 
     let next: SessionMessage[] = [
       ...session.messages,
-      { role: "user", content: question },
+      {
+        role: "user",
+        content: question,
+        user_attachments: attachments.length > 0 ? attachments : undefined,
+      },
       { role: "assistant", content: "", streaming: true },
     ];
     onUpdateById(startedSessionId, {
@@ -136,6 +150,7 @@ export function ChatPanel({
           question,
           mode: startMode,
           previous_mode: previousMode ?? undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
         })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
@@ -166,6 +181,7 @@ export function ChatPanel({
           question,
           mode: startMode,
           previous_mode: previousMode ?? undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
         next = [
           ...next.slice(0, -1),
@@ -318,15 +334,24 @@ export function ChatPanel({
         </div>
       )}
       <div className="border-t border-slate-200 bg-white px-4 pt-3 pb-3">
-        <div className="mb-2">
+        <div className="mb-2 flex items-end justify-between gap-3">
           <ModeSelector modes={modes} current={mode} onChange={handleModeChange} />
+          <AttachmentInput
+            attachments={draftAttachments}
+            onChange={setDraftAttachments}
+            disabled={isPending}
+          />
         </div>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="질문을 입력하세요…"
+            placeholder={
+              draftAttachments.length > 0
+                ? "이미지에 대해 질문하세요…"
+                : "질문을 입력하세요…"
+            }
             disabled={isPending}
             className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:bg-slate-100"
           />

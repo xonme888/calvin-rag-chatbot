@@ -43,18 +43,19 @@ def test_health_endpoint_returns_ok() -> None:
 # ====================================================================
 # /modes — KG 가용성 따라 available 변동
 # ====================================================================
-def test_modes_returns_3_options() -> None:
-    """3 모드(hybrid/agentic/kg) 모두 응답에 포함."""
+def test_modes_returns_registered_options() -> None:
+    """등록된 모든 모드 (hybrid/agentic/kg/vision) 응답에 포함."""
     client = TestClient(app)
     resp = client.get("/modes")
     assert resp.status_code == 200
     modes = resp.json()["modes"]
     names = {m["name"] for m in modes}
-    assert names == {"hybrid", "agentic", "kg"}
-    # hybrid/agentic 은 항상 available
+    assert names == {"hybrid", "agentic", "kg", "vision"}
+    # hybrid/agentic/vision 은 항상 available, kg 는 Neo4j 의존
     by_name = {m["name"]: m for m in modes}
     assert by_name["hybrid"]["available"] is True
     assert by_name["agentic"]["available"] is True
+    assert by_name["vision"]["available"] is True
 
 
 # ====================================================================

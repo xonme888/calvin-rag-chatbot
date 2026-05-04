@@ -36,6 +36,14 @@ def get_agentic_rag() -> AgenticRAG:
 
 
 @lru_cache(maxsize=1)
+def get_vision_rag() -> Any:
+    """VisionRAG — 사용자 이미지 첨부 처리. lazy."""
+    from rag_core.vision_rag import VisionRAG
+
+    return VisionRAG()
+
+
+@lru_cache(maxsize=1)
 def get_kg_rag_or_none() -> Any | None:
     """KG RAG — Neo4j 가용 + 그래프 인덱싱 됐을 때만 인스턴스. 아니면 None."""
     try:
@@ -85,6 +93,7 @@ def reset_dependency_cache() -> None:
     get_hybrid_rag.cache_clear()
     get_agentic_rag.cache_clear()
     get_kg_rag_or_none.cache_clear()
+    get_vision_rag.cache_clear()
     get_session_stats.cache_clear()
 
 
@@ -135,5 +144,14 @@ register(
         factory=_kg_factory,
         sse_capable=False,
         health=_kg_health,
+    )
+)
+register(
+    ModeEntry(
+        name="vision",
+        label="Vision (이미지 첨부)",
+        tracker_mode="Vision",
+        factory=lambda: get_vision_rag(),
+        sse_capable=False,
     )
 )

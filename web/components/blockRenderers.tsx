@@ -45,6 +45,20 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
     <div className="whitespace-pre-wrap leading-relaxed">{block.content}</div>
   ),
 
+  user_images: (block) => (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {block.attachments.map((a, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={i}
+          src={a.data_url}
+          alt={a.name ?? `image-${i}`}
+          className="max-w-[200px] max-h-[200px] rounded border border-white/30 object-cover"
+        />
+      ))}
+    </div>
+  ),
+
   header: (block) => {
     // MessageHeader 는 syncMeta/streamMeta 를 받지만, block 시점엔 이미 분해된
     // routed_mode 만 남아있어서 가짜 meta 객체로 어댑팅한다.

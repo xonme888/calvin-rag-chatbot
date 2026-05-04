@@ -10,9 +10,21 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # 모드 식별자 (외부 API 표기 — 클라이언트에서 사용)
-ModeName = Literal["hybrid", "agentic", "kg"]
+ModeName = Literal["hybrid", "agentic", "kg", "vision"]
 # 클라이언트가 보낼 수 있는 모드 — "auto" 는 백엔드 라우터가 결정
-InputMode = Literal["auto", "hybrid", "agentic", "kg"]
+InputMode = Literal["auto", "hybrid", "agentic", "kg", "vision"]
+
+
+class Attachment(BaseModel):
+    """사용자 첨부물 — 1차는 이미지 (data URL 형식)."""
+
+    type: Literal["image"] = Field(default="image")
+    data_url: str = Field(
+        min_length=1,
+        max_length=10_000_000,  # ~10MB base64 (실제 이미지 ~7MB)
+        description="data:image/jpeg;base64,... 형식 또는 https:// URL",
+    )
+    name: str | None = Field(default=None, description="파일명 (선택)")
 
 
 class HealthResponse(BaseModel):
@@ -46,6 +58,10 @@ class ChatRequest(BaseModel):
     previous_mode: ModeName | None = Field(
         default=None,
         description="'다른 모드로 재시도' 시 직전 응답의 라우팅 모드. 라우터 진화 학습 시그널.",
+    )
+    attachments: list[Attachment] = Field(
+        default_factory=list,
+        description="첨부물 (이미지 등). 비어있지 않으면 router 가 vision 모드로 강제.",
     )
 
 

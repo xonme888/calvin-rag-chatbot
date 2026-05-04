@@ -5,7 +5,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 // 실제 백엔드 RAG 모드
-export type RagMode = "hybrid" | "agentic" | "kg";
+export type RagMode = "hybrid" | "agentic" | "kg" | "vision";
 // 클라이언트가 보낼 수 있는 값 — "auto" 면 백엔드 라우터가 결정
 export type Mode = "auto" | RagMode;
 
@@ -14,12 +14,19 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Attachment {
+  type: "image";
+  data_url: string; // data:image/jpeg;base64,... 또는 https:// URL
+  name?: string;
+}
+
 export interface ChatRequest {
   question: string;
   mode: Mode;
   chat_history?: ChatMessage[];
   dense_weight?: number;
   previous_mode?: RagMode; // '다른 모드로 재시도' 시 직전 라우팅 모드
+  attachments?: Attachment[]; // 이미지 등 — 비어있지 않으면 vision 모드 강제
 }
 
 // 단일 페이지 인용 라벨 — 백엔드 rag_core/citation_label.CitationLabel 와 동기화

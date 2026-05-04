@@ -10,7 +10,7 @@
  * - { type: "chart"; spec: VegaSpec }
  */
 
-import type { CitationLabel, RagMode } from "./api";
+import type { Attachment, CitationLabel, RagMode } from "./api";
 import type { SessionMessage } from "./sessionStore";
 
 // SubgraphData 는 컴포넌트 쪽에서 정의 — 순환 import 방지로 inline 재선언
@@ -37,6 +37,7 @@ interface SubgraphPayload {
 export type Block =
   | { type: "text"; content: string; streaming?: boolean }
   | { type: "user_text"; content: string }
+  | { type: "user_images"; attachments: Attachment[] }
   | { type: "header"; mode: string | null; routedMode: string | null; autoRouted: boolean }
   | {
       type: "citations";
@@ -148,7 +149,12 @@ export function messageToBlocks(
   opts: ToBlocksOpts,
 ): Block[] {
   if (msg.role === "user") {
-    return [{ type: "user_text", content: msg.content }];
+    const blocks: Block[] = [];
+    if (msg.user_attachments && msg.user_attachments.length > 0) {
+      blocks.push({ type: "user_images", attachments: msg.user_attachments });
+    }
+    blocks.push({ type: "user_text", content: msg.content });
+    return blocks;
   }
 
   const out: Block[] = [];

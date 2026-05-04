@@ -57,9 +57,19 @@ def _client_ip(request: Request) -> str:
 def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
     """req.mode 가 'auto' 면 라우터로 결정된 모드로 갈아끼우고 반환.
 
+    우선순위:
+    1. attachments 비어있지 않음 → 'vision' 강제 (mode 명시되어 있어도 override)
+    2. mode == 'auto' → route_question
+    3. 그 외 → 그대로
+
     Returns:
-        (resolved_req, was_auto) — was_auto 는 응답 metadata 의 auto_routed 표기에 사용.
+        (resolved_req, was_auto) — was_auto 는 응답 metadata 의 auto_routed 표기.
     """
+    # 이미지 첨부는 항상 vision (사용자가 명시한 mode 보다 우선)
+    if req.attachments:
+        if req.mode != "vision":
+            return req.model_copy(update={"mode": "vision"}), True
+        return req, False
     if req.mode == "auto":
         routed = route_question(req.question)
         return req.model_copy(update={"mode": routed}), True
@@ -110,12 +120,17 @@ def _invoke_sync(
     # 회로 차단 — 연속 5회 실패 시 30초 차단 (PRD-4)
     breaker = get_breaker(f"mode:{req.mode}", failure_threshold=5, reset_timeout=30.0)
     try:
-        # hybrid 만 chat_history/dense_weight 옵션 지원 — capability 차이
+        # 모드별 capability 분기 — 시그니처 차이가 있는 모드만 명시
         if req.mode == "hybrid":
             rag.config.dense_weight = req.dense_weight
             history = _to_langchain_history(req.chat_history)
             return breaker.call(
                 rag.query, req.question, chat_history=history, callbacks=callbacks
+            )
+        if req.mode == "vision":
+            attachments = [a.model_dump() for a in req.attachments]
+            return breaker.call(
+                rag.query, req.question, attachments=attachments, callbacks=callbacks
             )
         return breaker.call(rag.query, req.question, callbacks=callbacks)
     except CircuitOpenError as e:

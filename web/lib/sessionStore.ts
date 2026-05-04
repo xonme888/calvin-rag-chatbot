@@ -3,7 +3,7 @@
 import { get as idbGet, set as idbSet } from "idb-keyval";
 import { useCallback, useEffect, useState } from "react";
 
-import type { ChatStreamMeta, ChatSyncResponse, Mode } from "./api";
+import type { Attachment, ChatStreamMeta, ChatSyncResponse, Mode } from "./api";
 
 /**
  * 멀티 세션 영속화 — 1차 구현은 localStorage.
@@ -26,6 +26,8 @@ export interface SessionMessage {
   streamMeta?: ChatStreamMeta;
   streaming?: boolean;
   attachments?: SessionAttachment[]; // 향후 MCP/도구 결과
+  /** 사용자 첨부 이미지 (vision 모드) — IndexedDB 에 base64 보관. */
+  user_attachments?: Attachment[];
 }
 
 export interface ChatSession {
