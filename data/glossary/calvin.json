@@ -10,7 +10,8 @@
         "page": 138,
         "label": "p.138 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "본체",
@@ -24,7 +25,8 @@
         "page": 137,
         "label": "p.137 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "위격",
@@ -38,7 +40,8 @@
         "page": 142,
         "label": "p.142 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "동일본질",
@@ -51,7 +54,8 @@
         "page": 140,
         "label": "p.140 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "성부",
@@ -64,7 +68,8 @@
         "page": 169,
         "label": "p.169 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "성자",
@@ -78,7 +83,8 @@
         "page": 155,
         "label": "p.155 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "성령",
@@ -91,7 +97,8 @@
         "page": 152,
         "label": "p.152 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "유일성",
@@ -104,7 +111,8 @@
         "page": 154,
         "label": "p.154 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "교부",
@@ -117,7 +125,8 @@
         "page": 138,
         "label": "p.138 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "이단",
@@ -130,7 +139,8 @@
         "page": 143,
         "label": "p.143 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "신성",
@@ -143,7 +153,8 @@
         "page": 149,
         "label": "p.149 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "구속",
@@ -156,7 +167,8 @@
         "page": 136,
         "label": "p.136 (1권 13장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "자유의지",
@@ -169,7 +181,8 @@
         "page": 249,
         "label": "p.249 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "타락",
@@ -183,7 +196,8 @@
         "page": 246,
         "label": "p.246 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "부패",
@@ -196,7 +210,8 @@
         "page": 246,
         "label": "p.246 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "은총",
@@ -209,7 +224,8 @@
         "page": 255,
         "label": "p.255 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "어거스틴",
@@ -222,7 +238,8 @@
         "page": 250,
         "label": "p.250 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "펠라기우스",
@@ -235,7 +252,8 @@
         "page": 267,
         "label": "p.267 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "예정론",
@@ -243,7 +261,8 @@
       "predestination"
     ],
     "definition": "하나님이 구원받을 자와 멸망할 자를 미리 정하신다는 교리로, 인간의 자유의지와 대립되는 개념이다.",
-    "sources": []
+    "sources": [],
+    "source": "curated"
   },
   {
     "term": "죄의 노예",
@@ -256,7 +275,8 @@
         "page": 253,
         "label": "p.253 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "자기 과신",
@@ -269,7 +289,8 @@
         "page": 247,
         "label": "p.247 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "신성 모독",
@@ -282,7 +303,8 @@
         "page": 256,
         "label": "p.256 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "의지의 자유",
@@ -295,7 +317,8 @@
         "page": 271,
         "label": "p.271 (2권 2장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "자유의지론",
@@ -303,7 +326,8 @@
       "theory of free will"
     ],
     "definition": "인간이 자유롭게 선택할 수 있다는 주장을 담고 있는 신학적 논의로, 칼빈은 이를 비판하였다.",
-    "sources": []
+    "sources": [],
+    "source": "curated"
   },
   {
     "term": "칭의",
@@ -316,7 +340,8 @@
         "page": 618,
         "label": "p.618 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "이신칭의",
@@ -324,7 +349,8 @@
       "Faith Alone"
     ],
     "definition": "믿음만으로 의롭다함을 받는다는 교리로, 행위가 아닌 믿음에 의한 구원을 강조한다.",
-    "sources": []
+    "sources": [],
+    "source": "curated"
   },
   {
     "term": "중생",
@@ -337,7 +363,8 @@
         "page": 618,
         "label": "p.618 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "은혜",
@@ -350,7 +377,8 @@
         "page": 624,
         "label": "p.624 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "전가",
@@ -363,7 +391,8 @@
         "page": 620,
         "label": "p.620 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "행위",
@@ -376,7 +405,8 @@
         "page": 635,
         "label": "p.635 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "하나님의 심판",
@@ -389,7 +419,8 @@
         "page": 618,
         "label": "p.618 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "믿음",
@@ -402,7 +433,8 @@
         "page": 618,
         "label": "p.618 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "죄의 용서",
@@ -415,7 +447,8 @@
         "page": 639,
         "label": "p.639 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "구원",
@@ -428,7 +461,8 @@
         "page": 618,
         "label": "p.618 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "하나님과의 화해",
@@ -441,7 +475,8 @@
         "page": 638,
         "label": "p.638 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "본질적 의",
@@ -454,7 +489,8 @@
         "page": 621,
         "label": "p.621 (3권 11장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "예정론",
@@ -467,7 +503,8 @@
         "page": 778,
         "label": "p.778 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "하나님의 선택",
@@ -480,7 +517,8 @@
         "page": 783,
         "label": "p.783 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "은혜",
@@ -493,7 +531,8 @@
         "page": 785,
         "label": "p.785 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "구원",
@@ -506,7 +545,8 @@
         "page": 778,
         "label": "p.778 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "예지",
@@ -519,7 +559,8 @@
         "page": 782,
         "label": "p.782 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "겸손",
@@ -532,7 +573,8 @@
         "page": 779,
         "label": "p.779 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "언약",
@@ -545,7 +587,8 @@
         "page": 784,
         "label": "p.784 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "유기",
@@ -558,7 +601,8 @@
         "page": 785,
         "label": "p.785 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "신비",
@@ -571,7 +615,8 @@
         "page": 781,
         "label": "p.781 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "호기심",
@@ -584,7 +629,8 @@
         "page": 779,
         "label": "p.779 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "영원한 선택",
@@ -597,7 +643,8 @@
         "page": 778,
         "label": "p.778 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "구원의 소망",
@@ -610,7 +657,8 @@
         "page": 778,
         "label": "p.778 (3권 21장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "성례",
@@ -624,7 +672,8 @@
         "page": 1064,
         "label": "p.1064 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "어거스틴",
@@ -637,7 +686,8 @@
         "page": 1080,
         "label": "p.1080 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "언약",
@@ -650,7 +700,8 @@
         "page": 1073,
         "label": "p.1073 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "믿음",
@@ -663,7 +714,8 @@
         "page": 1065,
         "label": "p.1065 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "약속",
@@ -676,7 +728,8 @@
         "page": 1068,
         "label": "p.1068 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "표징",
@@ -690,7 +743,8 @@
         "page": 1060,
         "label": "p.1060 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "성령",
@@ -703,7 +757,8 @@
         "page": 1072,
         "label": "p.1072 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "신비",
@@ -716,7 +771,8 @@
         "page": 1060,
         "label": "p.1060 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "이신칭의",
@@ -724,7 +780,8 @@
       "justification by faith"
     ],
     "definition": "믿음으로 의롭다 하심을 받는 교리로, 성례는 이 교리를 확증하는 역할을 한다.",
-    "sources": []
+    "sources": [],
+    "source": "curated"
   },
   {
     "term": "영적 은혜",
@@ -737,7 +794,8 @@
         "page": 1067,
         "label": "p.1067 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "구원",
@@ -750,7 +808,8 @@
         "page": 1061,
         "label": "p.1061 (4권 14장)"
       }
-    ]
+    ],
+    "source": "curated"
   },
   {
     "term": "신앙 고백",
@@ -758,6 +817,7 @@
       "confession of faith"
     ],
     "definition": "성례는 신자들이 하나님 앞에서 자신의 믿음을 고백하는 독특한 표지로 기능한다.",
-    "sources": []
+    "sources": [],
+    "source": "curated"
   }
 ]

@@ -34,6 +34,9 @@ class GlossaryTerm:
     aliases: tuple[str, ...]
     definition: str
     sources: tuple[TermSource, ...]
+    # 출처 추적 — 운영 마이그레이션 시 충돌 해결에 사용
+    # "curated": 사용자 수동 검수, "kg": Neo4j auto-export, "merged": 둘 다
+    source: str = "curated"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +44,7 @@ class GlossaryTerm:
             "aliases": list(self.aliases),
             "definition": self.definition,
             "sources": [{"page": s.page, "label": s.label} for s in self.sources],
+            "source": self.source,
         }
 
 
@@ -75,8 +79,16 @@ def load_glossary() -> tuple[GlossaryTerm, ...]:
             for s in entry.get("sources", [])
             if isinstance(s, dict) and s.get("page") is not None
         )
+        # 기존 항목은 source 키 없으면 'curated' (사용자 수동 검수 가정)
+        source = str(entry.get("source", "curated")).strip() or "curated"
         out.append(
-            GlossaryTerm(term=term, aliases=aliases, definition=definition, sources=sources)
+            GlossaryTerm(
+                term=term,
+                aliases=aliases,
+                definition=definition,
+                sources=sources,
+                source=source,
+            )
         )
     return tuple(out)
 
