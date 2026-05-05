@@ -22,7 +22,7 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 
 _VISION_SYSTEM = """당신은 칼빈 신학 챗봇의 비전 분석 어시스턴트입니다.
@@ -77,28 +77,31 @@ class VisionRAG:
         start = time.time()
 
         atts = attachments or []
-        # 이미지 없으면 단순 텍스트 응답 (router 가 보낸 게 아닌 경우 안전망)
-        content: list[dict[str, Any]] = [
-            {"type": "text", "text": f"{_VISION_SYSTEM}\n\n질문: {question}"}
-        ]
+        # OpenAI multimodal 메시지 형식 — system + human(text + image_url N개)
+        # 시스템 지시는 user message 와 분리해야 모델이 정확히 따른다.
+        human_content: list[dict[str, Any]] = [{"type": "text", "text": question}]
         for att in atts:
             url = att.get("data_url") if isinstance(att, dict) else getattr(att, "data_url", None)
             if not url:
                 continue
             # detail="low": 이미지 1장 = 65 토큰 고정 (~₩0.1)
             # 비용 폭주 방어 — 신학 도식/인물 사진 인식엔 충분.
-            content.append(
+            human_content.append(
                 {
                     "type": "image_url",
                     "image_url": {"url": url, "detail": "low"},
                 }
             )
 
+        messages = [
+            SystemMessage(content=_VISION_SYSTEM),
+            HumanMessage(content=human_content),
+        ]
         invoke_config: dict[str, Any] = {}
         if callbacks:
             invoke_config["callbacks"] = callbacks
 
-        response = self.llm.invoke([HumanMessage(content=content)], config=invoke_config)
+        response = self.llm.invoke(messages, config=invoke_config)
         answer = response.content if hasattr(response, "content") else str(response)
 
         elapsed = time.time() - start

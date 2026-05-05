@@ -67,6 +67,13 @@ def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
     """
     # 이미지 첨부는 항상 vision (사용자가 명시한 mode 보다 우선)
     if req.attachments:
+        trace_event(
+            "router.decide",
+            decided="vision",
+            method="attachments_present",
+            attachment_count=len(req.attachments),
+            client_mode=req.mode,
+        )
         if req.mode != "vision":
             return req.model_copy(update={"mode": "vision"}), True
         return req, False
@@ -171,6 +178,7 @@ async def chat_sync(
         ip=ip,
         question_preview=req.question[:120],
         client_mode=req.mode,
+        attachment_count=len(req.attachments),
     )
 
     # 0. Token budget cap — 전역 + 사용자/IP 단위 (PRD-4)
@@ -469,6 +477,7 @@ async def chat_stream(
         ip=ip,
         question_preview=req.question[:120],
         client_mode=req.mode,
+        attachment_count=len(req.attachments),
     )
 
     # mode='auto' 라우팅 — 사용자에게 모드 노출 X
