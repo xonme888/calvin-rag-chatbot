@@ -106,6 +106,26 @@ export async function fetchGlossary(): Promise<MatchedTerm[]> {
   }
 }
 
+/** 특정 term 의 KG 1-hop subgraph. KG 비활성 시 kg_available=false. */
+export interface TermGraphResponse {
+  nodes: Array<{ id: string; label: string; type?: string }>;
+  edges: Array<{ source: string; target: string; label?: string }>;
+  kg_available: boolean;
+}
+
+export async function fetchTermGraph(term: string): Promise<TermGraphResponse> {
+  try {
+    const r = await fetch(
+      `${API_BASE}/glossary/${encodeURIComponent(term)}/graph`,
+      { cache: "no-store" },
+    );
+    if (!r.ok) return { nodes: [], edges: [], kg_available: false };
+    return (await r.json()) as TermGraphResponse;
+  } catch {
+    return { nodes: [], edges: [], kg_available: false };
+  }
+}
+
 /**
  * 첫 답변 종료 후 cheap LLM 으로 짧은 세션 제목 생성.
  * 실패 시 빈 문자열 — 호출측은 deriveTitle 폴백.

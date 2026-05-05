@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Info } from "lucide-react";
+import { BookOpen, Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes, generateAutoTitle } from "@/lib/api";
 import type { Attachment, ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
 import { AttachmentInput } from "./AttachmentInput";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/sessionStore";
 import { AboutModal } from "./AboutModal";
 import { renderBlock, type BlockContext } from "./blockRenderers";
+import { GlossaryDrawer } from "./GlossaryDrawer";
 import { ModeSelector } from "./ModeSelector";
 import { SourcePreviewDrawer } from "./SourcePreviewDrawer";
 import type { SourceItem } from "./SourcePreviewDrawer";
@@ -62,6 +63,7 @@ export function ChatPanel({
   const [draftAttachments, setDraftAttachments] = useState<Attachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [drawer, setDrawer] = useState<{
     items: SourceItem[];
     highlightedIndex?: number;
@@ -242,18 +244,33 @@ export function ChatPanel({
           )}
           {session.title || "칼빈 신학 챗봇"}
         </h1>
-        <button
-          type="button"
-          onClick={() => setAboutOpen(true)}
-          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700"
-          aria-label="소개 열기"
-          title="소개"
-        >
-          <Info size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setGlossaryOpen(true)}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+            aria-label="용어집 열기"
+            title="용어집"
+          >
+            <BookOpen size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setAboutOpen(true)}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+            aria-label="소개 열기"
+            title="소개"
+          >
+            <Info size={18} />
+          </button>
+        </div>
       </div>
 
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <GlossaryDrawer
+        open={glossaryOpen}
+        onClose={() => setGlossaryOpen(false)}
+      />
       <SourcePreviewDrawer
         open={drawer !== null}
         items={drawer?.items ?? []}
