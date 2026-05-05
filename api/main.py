@@ -71,13 +71,29 @@ app = FastAPI(
 )
 
 # CORS — Next.js 프론트 (Vercel preview 포함) 와 통신
-# 운영 단계에선 Cloudflare Access JWT (Phase 2 Step 5) 가 외곽 인증, CORS 는 origin 만 제한
+# 환경변수 CORS_ORIGINS (콤마 구분) 으로 좁힘. 미설정 시 개발 모드 와일드카드.
+# 운영 시 예: CORS_ORIGINS=https://chat.example.com,https://chat-staging.example.com
+import os as _cors_os
+
+_cors_raw = _cors_os.getenv("CORS_ORIGINS", "").strip()
+if _cors_raw:
+    _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    _cors_credentials = True
+else:
+    # 개발 모드 — 와일드카드 (credentials False — 브라우저가 wildcard+credentials 거부)
+    _cors_origins = ["*"]
+    _cors_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO Step 5: 운영 도메인만
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_credentials,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+)
+print(
+    f"[boot] CORS allow_origins={_cors_origins} credentials={_cors_credentials}",
+    flush=True,
 )
 
 # Rate limiter — IP 단위 (env: RATE_LIMIT_PER_MINUTE, RATE_LIMIT_PER_DAY)

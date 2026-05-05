@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment
+.env
+.env.bak
+.env.local
+
+# Index cache (재생성 가능 — 첫 부팅 시 빌드)
+indexes/
+*.faiss
+*.pkl
+
+# 데이터 — 칼빈 PDF (저작권). 글로서리 JSON 만 별도 COPY.
+data/calvin/
+*.pdf
+*.epub
+
+# Docs / Tests / Web (분리 배포)
+docs/
+tests/
+web/
+.github/
+README.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

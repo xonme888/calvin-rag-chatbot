@@ -1,0 +1,67 @@
+# Fly.io 배포 설정 — Calvin RAG Chatbot API
+#
+# 사용:
+#   fly launch --no-deploy   # 첫 가입/생성
+#   fly deploy               # 배포
+#   fly secrets set OPENAI_API_KEY=sk-...
+#   fly secrets set INVITE_CODES=portfolio2026,demo-friend
+#   fly secrets set CORS_ORIGINS=https://your-vercel-app.vercel.app
+#
+# 메모리: hybrid 인덱스 (FAISS) 가 메모리 ~500MB 사용 가정.
+# Free tier 256MB 로는 부족 — shared-cpu-1x@1024MB 로 시작.
+
+app = "calvin-rag-api"  # 가입 시 본인 이름으로 변경
+primary_region = "nrt"  # Tokyo — 한국 사용자에게 가까움
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  # PDF 경로 — volume 또는 빌드 시 포함된 경로
+  CALVIN_PDF_PATH = "/app/data/calvin/calvin_institutes.pdf"
+  # Vision/KG 비활성 (필요 시 활성화)
+  VISION_ENABLED = "true"
+  # 로그 sink — Fly.io 는 stdout 자동 수집
+  LOG_SINK = "stdout"
+  # Budget — free 사용자 일일 토큰 한도
+  BUDGET_FREE_CAP = "10000"
+  DAILY_TOKEN_CAP = "200000"
+
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+  auto_start_machines = true
+  auto_stop_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [services.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 30
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "get"
+    path = "/health/live"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024
+
+# PDF 영구 저장 — 인덱스 캐시도 함께 보존 (첫 부팅 후 재인덱싱 회피)
+[mounts]
+  source = "calvin_data"
+  destination = "/app/data/calvin"
