@@ -1,62 +1,763 @@
 [
   {
-    "term": "예정론",
-    "aliases": ["예정 교리", "predestination"],
-    "definition": "하나님이 영원 전부터 어떤 사람을 구원으로 (또는 멸망으로) 선택하신 작정. 칼빈은 이를 '하나님의 영원한 결정' 으로 정의하며, 인간의 행위와 무관한 은혜의 표현으로 본다.",
-    "sources": [{"page": 780, "label": "p.780 (3권 21장)"}]
+    "term": "삼위일체",
+    "aliases": [
+      "Trinity"
+    ],
+    "definition": "하나님이 한 본체 안에 성부, 성자, 성령의 세 위격으로 존재하신다는 교리로, 각 위격은 본질적으로 동일하지만 서로 구별된다.",
+    "sources": [
+      {
+        "page": 138,
+        "label": "p.138 (1권 13장)"
+      }
+    ]
   },
   {
-    "term": "이중예정",
-    "aliases": ["이중예정론", "double predestination"],
-    "definition": "선택 (election) 과 유기 (reprobation) 가 모두 하나님의 영원한 작정에 속한다는 입장. 칼빈주의의 핵심 교리이지만 단순 예정과는 강조점이 다르다.",
-    "sources": []
+    "term": "본체",
+    "aliases": [
+      "essence",
+      "substance"
+    ],
+    "definition": "하나님의 본질을 의미하며, 삼위일체의 세 위격이 동일한 본체를 공유함을 나타낸다.",
+    "sources": [
+      {
+        "page": 137,
+        "label": "p.137 (1권 13장)"
+      }
+    ]
   },
   {
-    "term": "이신칭의",
-    "aliases": ["이신득의", "sola fide", "오직 믿음으로"],
-    "definition": "의롭다 인정받는 것 (칭의) 이 인간의 행위가 아닌 그리스도 안의 믿음으로만 가능하다는 종교개혁 핵심 교리. 루터와 칼빈이 공유하나 결합 방식이 다르다.",
-    "sources": []
+    "term": "위격",
+    "aliases": [
+      "person",
+      "hypostasis"
+    ],
+    "definition": "삼위일체에서 성부, 성자, 성령 각각의 구별된 존재를 나타내는 용어로, 각 위격은 고유한 특성을 가진다.",
+    "sources": [
+      {
+        "page": 142,
+        "label": "p.142 (1권 13장)"
+      }
+    ]
   },
   {
-    "term": "어거스틴",
-    "aliases": ["아우구스티누스", "Augustine"],
-    "definition": "북아프리카 히포의 교부 (354-430). 원죄·은총·예정 교리에서 칼빈 신학에 가장 큰 영향을 준 인물.",
-    "sources": []
+    "term": "동일본질",
+    "aliases": [
+      "homoousios"
+    ],
+    "definition": "성부와 성자가 동일한 본질을 가진다는 교리로, 아리우스주의를 반박하기 위해 사용되었다.",
+    "sources": [
+      {
+        "page": 140,
+        "label": "p.140 (1권 13장)"
+      }
+    ]
   },
   {
-    "term": "성례",
-    "aliases": ["성찬", "성례전", "sacrament"],
-    "definition": "그리스도가 직접 제정하신 가시적 표징 (세례·성찬). 칼빈은 루터의 실재론과 츠빙글리의 기념론 사이에서 '영적 임재' 입장을 취했다.",
-    "sources": []
+    "term": "성부",
+    "aliases": [
+      "Father"
+    ],
+    "definition": "삼위일체의 첫 번째 위격으로, 창조주이자 성자의 아버지로 여겨진다.",
+    "sources": [
+      {
+        "page": 169,
+        "label": "p.169 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "성자",
+    "aliases": [
+      "Son",
+      "Christ"
+    ],
+    "definition": "삼위일체의 두 번째 위격으로, 하나님과 동일한 본질을 가지며 인류의 구속을 위해 육신을 입으신 분이다.",
+    "sources": [
+      {
+        "page": 155,
+        "label": "p.155 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "성령",
+    "aliases": [
+      "Holy Spirit"
+    ],
+    "definition": "삼위일체의 세 번째 위격으로, 신자의 마음에 거주하며 하나님의 뜻을 수행하는 역할을 한다.",
+    "sources": [
+      {
+        "page": 152,
+        "label": "p.152 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "유일성",
+    "aliases": [
+      "uniqueness"
+    ],
+    "definition": "하나님이 유일하신 존재임을 강조하며, 삼위일체의 각 위격이 독립적이지만 본질적으로 하나임을 나타낸다.",
+    "sources": [
+      {
+        "page": 154,
+        "label": "p.154 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "교부",
+    "aliases": [
+      "Church Fathers"
+    ],
+    "definition": "초대 교회 시기에 신학적 논쟁과 교리를 정립한 신학자들로, 삼위일체 교리의 발전에 기여하였다.",
+    "sources": [
+      {
+        "page": 138,
+        "label": "p.138 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "이단",
+    "aliases": [
+      "heresy"
+    ],
+    "definition": "정통 교리와 반대되는 신념이나 교리를 의미하며, 삼위일체 교리에 대한 반대 주장을 포함한다.",
+    "sources": [
+      {
+        "page": 143,
+        "label": "p.143 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "신성",
+    "aliases": [
+      "divinity"
+    ],
+    "definition": "하나님의 본질이나 특성을 나타내며, 삼위일체의 각 위격이 신성을 공유함을 강조한다.",
+    "sources": [
+      {
+        "page": 149,
+        "label": "p.149 (1권 13장)"
+      }
+    ]
+  },
+  {
+    "term": "구속",
+    "aliases": [
+      "redemption"
+    ],
+    "definition": "인류의 죄로부터 구원받는 과정을 의미하며, 성자의 사역과 밀접하게 관련된다.",
+    "sources": [
+      {
+        "page": 136,
+        "label": "p.136 (1권 13장)"
+      }
+    ]
   },
   {
     "term": "자유의지",
-    "aliases": ["자유 의지", "free will"],
-    "definition": "인간이 선악을 자유롭게 선택할 능력. 칼빈은 타락 후 인간의 자유의지가 죄로 향하는 방향으로 노예화됐다고 본다 (속박된 의지).",
-    "sources": []
+    "aliases": [
+      "free will"
+    ],
+    "definition": "자유의지는 인간이 선과 악을 선택할 수 있는 능력으로, 그러나 죄로 인해 그 힘이 제한되었다고 주장된다.",
+    "sources": [
+      {
+        "page": 249,
+        "label": "p.249 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "타락",
+    "aliases": [
+      "fall",
+      "original sin"
+    ],
+    "definition": "인간이 아담의 범죄로 인해 본성적으로 부패하게 된 상태로, 이는 모든 인류에게 전가되었다.",
+    "sources": [
+      {
+        "page": 246,
+        "label": "p.246 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "부패",
+    "aliases": [
+      "corruption"
+    ],
+    "definition": "인간의 본성이 죄로 인해 손상된 상태로, 이는 선한 의지를 상실하게 만든다.",
+    "sources": [
+      {
+        "page": 246,
+        "label": "p.246 (2권 2장)"
+      }
+    ]
   },
   {
     "term": "은총",
-    "aliases": ["은혜", "grace"],
-    "definition": "받을 자격이 없는 자에게 주시는 하나님의 호의. 칼빈 신학에서 구원의 모든 단계 (선택·소명·칭의·성화) 가 은총의 표현.",
+    "aliases": [
+      "grace"
+    ],
+    "definition": "하나님이 인간에게 주시는 구원의 도움으로, 인간이 스스로 의를 행할 수 없음을 인식하게 한다.",
+    "sources": [
+      {
+        "page": 255,
+        "label": "p.255 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "어거스틴",
+    "aliases": [
+      "Augustine"
+    ],
+    "definition": "자유의지와 타락에 대한 교리를 정립한 초기 교부로, 인간의 의지가 하나님의 은총 없이는 자유롭지 않다고 주장했다.",
+    "sources": [
+      {
+        "page": 250,
+        "label": "p.250 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "펠라기우스",
+    "aliases": [
+      "Pelagius"
+    ],
+    "definition": "인간의 자유의지를 강조하며, 타락 후에도 인간이 스스로 의를 선택할 수 있다고 주장한 신학자.",
+    "sources": [
+      {
+        "page": 267,
+        "label": "p.267 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "예정론",
+    "aliases": [
+      "predestination"
+    ],
+    "definition": "하나님이 구원받을 자와 멸망할 자를 미리 정하신다는 교리로, 인간의 자유의지와 대립되는 개념이다.",
     "sources": []
   },
   {
-    "term": "성화",
-    "aliases": ["성결", "sanctification"],
-    "definition": "칭의 이후 신자가 점진적으로 그리스도의 형상을 닮아가는 과정. 칼빈은 칭의와 성화를 분리하지 않고 동시적·불가분의 은혜로 본다.",
+    "term": "죄의 노예",
+    "aliases": [
+      "slave to sin"
+    ],
+    "definition": "인간이 죄로 인해 자유를 잃고 죄에 종속된 상태를 의미하며, 이는 인간의 본성에 깊이 뿌리내린다.",
+    "sources": [
+      {
+        "page": 253,
+        "label": "p.253 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "자기 과신",
+    "aliases": [
+      "self-confidence"
+    ],
+    "definition": "인간이 자신의 능력이나 의지를 과대평가하여 하나님의 은총을 무시하는 태도.",
+    "sources": [
+      {
+        "page": 247,
+        "label": "p.247 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "신성 모독",
+    "aliases": [
+      "blasphemy"
+    ],
+    "definition": "하나님의 영광을 가로채려는 시도로, 인간이 자신의 공로를 주장할 때 발생하는 죄.",
+    "sources": [
+      {
+        "page": 256,
+        "label": "p.256 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "의지의 자유",
+    "aliases": [
+      "freedom of will"
+    ],
+    "definition": "인간이 자신의 의지로 선과 악을 선택할 수 있는 능력으로, 그러나 죄로 인해 제한된다.",
+    "sources": [
+      {
+        "page": 271,
+        "label": "p.271 (2권 2장)"
+      }
+    ]
+  },
+  {
+    "term": "자유의지론",
+    "aliases": [
+      "theory of free will"
+    ],
+    "definition": "인간이 자유롭게 선택할 수 있다는 주장을 담고 있는 신학적 논의로, 칼빈은 이를 비판하였다.",
     "sources": []
   },
   {
-    "term": "교회",
-    "aliases": ["church", "에클레시아"],
-    "definition": "택자들의 공동체. 칼빈은 보이는 교회 (visible church) 와 보이지 않는 교회 (invisible church) 를 구분하면서도 보이는 교회를 '신자의 어머니' 로 본다.",
+    "term": "칭의",
+    "aliases": [
+      "Justification"
+    ],
+    "definition": "하나님께서 믿음을 통해 죄인을 의롭다고 인정하시는 행위로, 그리스도의 의가 전가되는 것을 포함한다.",
+    "sources": [
+      {
+        "page": 618,
+        "label": "p.618 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "이신칭의",
+    "aliases": [
+      "Faith Alone"
+    ],
+    "definition": "믿음만으로 의롭다함을 받는다는 교리로, 행위가 아닌 믿음에 의한 구원을 강조한다.",
     "sources": []
   },
   {
-    "term": "성경 무오",
-    "aliases": ["성경 권위", "scriptura sui ipsius interpres"],
-    "definition": "성경이 자체적으로 권위를 가지며 다른 권위 (교회 전통·이성) 에 종속되지 않는다는 종교개혁 원리. 칼빈은 성령의 내적 증거를 강조한다.",
+    "term": "중생",
+    "aliases": [
+      "Regeneration"
+    ],
+    "definition": "하나님께서 성령을 통해 신자를 새롭게 하여 그리스도와의 연합을 이루는 과정이다.",
+    "sources": [
+      {
+        "page": 618,
+        "label": "p.618 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "은혜",
+    "aliases": [
+      "Grace"
+    ],
+    "definition": "하나님이 인간에게 주시는 무조건적인 사랑과 호의로, 칭의와 구원의 근본적 기초가 된다.",
+    "sources": [
+      {
+        "page": 624,
+        "label": "p.624 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "전가",
+    "aliases": [
+      "Imputation"
+    ],
+    "definition": "그리스도의 의가 믿는 자에게 전가되어 그들이 의롭다고 여겨지는 과정을 의미한다.",
+    "sources": [
+      {
+        "page": 620,
+        "label": "p.620 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "행위",
+    "aliases": [
+      "Works"
+    ],
+    "definition": "신자의 삶에서 나타나는 선한 행동으로, 칭의와는 구별되며 구원의 근거가 아니다.",
+    "sources": [
+      {
+        "page": 635,
+        "label": "p.635 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "하나님의 심판",
+    "aliases": [
+      "Divine Judgment"
+    ],
+    "definition": "하나님이 인간의 행위에 대해 내리는 판단으로, 의롭다함을 받는 기준이 된다.",
+    "sources": [
+      {
+        "page": 618,
+        "label": "p.618 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "믿음",
+    "aliases": [
+      "Faith"
+    ],
+    "definition": "하나님과 그리스도를 신뢰하는 것으로, 칭의의 수단이자 구원의 조건으로 작용한다.",
+    "sources": [
+      {
+        "page": 618,
+        "label": "p.618 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "죄의 용서",
+    "aliases": [
+      "Forgiveness of Sins"
+    ],
+    "definition": "하나님이 죄인을 용서하여 그를 의롭다고 인정하는 행위로, 칭의의 중요한 요소이다.",
+    "sources": [
+      {
+        "page": 639,
+        "label": "p.639 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "구원",
+    "aliases": [
+      "Salvation"
+    ],
+    "definition": "죄로부터의 구출과 영원한 생명을 얻는 과정으로, 칭의와 중생을 포함한다.",
+    "sources": [
+      {
+        "page": 618,
+        "label": "p.618 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "하나님과의 화해",
+    "aliases": [
+      "Reconciliation with God"
+    ],
+    "definition": "죄로 인해 단절된 인간과 하나님 간의 관계 회복을 의미하며, 칭의의 결과로 나타난다.",
+    "sources": [
+      {
+        "page": 638,
+        "label": "p.638 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "본질적 의",
+    "aliases": [
+      "Essential Righteousness"
+    ],
+    "definition": "오시안더의 주장으로, 신자가 본질적으로 의롭게 된다는 개념으로 칼빈에 의해 반박된다.",
+    "sources": [
+      {
+        "page": 621,
+        "label": "p.621 (3권 11장)"
+      }
+    ]
+  },
+  {
+    "term": "예정론",
+    "aliases": [
+      "Predestination"
+    ],
+    "definition": "하나님이 영원히 어떤 사람은 구원하고 어떤 사람은 멸망하도록 선택하신 교리로, 인간의 행위와 무관하게 이루어진다.",
+    "sources": [
+      {
+        "page": 778,
+        "label": "p.778 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "하나님의 선택",
+    "aliases": [
+      "Divine Election"
+    ],
+    "definition": "하나님이 특정 개인이나 민족을 구원하기 위해 선택하신 행위로, 그 선택은 하나님의 은혜에 기초한다.",
+    "sources": [
+      {
+        "page": 783,
+        "label": "p.783 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "은혜",
+    "aliases": [
+      "Grace"
+    ],
+    "definition": "하나님이 인간에게 값없이 주시는 사랑과 자비로, 구원의 근본 원천으로 여겨진다.",
+    "sources": [
+      {
+        "page": 785,
+        "label": "p.785 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "구원",
+    "aliases": [
+      "Salvation"
+    ],
+    "definition": "하나님이 선택한 자들에게 주어지는 영원한 생명과 영적 해방을 의미하며, 예정론의 핵심 주제 중 하나이다.",
+    "sources": [
+      {
+        "page": 778,
+        "label": "p.778 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "예지",
+    "aliases": [
+      "Foreknowledge"
+    ],
+    "definition": "하나님이 모든 사건과 개인의 선택을 미리 아시는 능력으로, 예정론과 관련하여 논의된다.",
+    "sources": [
+      {
+        "page": 782,
+        "label": "p.782 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "겸손",
+    "aliases": [
+      "Humility"
+    ],
+    "definition": "하나님 앞에서 자신을 낮추는 태도로, 예정론을 이해하는 데 필수적인 자세로 강조된다.",
+    "sources": [
+      {
+        "page": 779,
+        "label": "p.779 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "언약",
+    "aliases": [
+      "Covenant"
+    ],
+    "definition": "하나님과 그의 백성 간의 약속으로, 예정론에서 하나님의 선택과 구원의 맥락을 제공한다.",
+    "sources": [
+      {
+        "page": 784,
+        "label": "p.784 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "유기",
+    "aliases": [
+      "Reprobation"
+    ],
+    "definition": "하나님이 특정 개인이나 집단을 구원에서 제외하는 행위로, 예정론의 중요한 측면이다.",
+    "sources": [
+      {
+        "page": 785,
+        "label": "p.785 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "신비",
+    "aliases": [
+      "Mystery"
+    ],
+    "definition": "하나님의 계획과 의도를 인간이 완전히 이해할 수 없는 상태로, 예정론의 탐구에서 경계해야 할 요소로 언급된다.",
+    "sources": [
+      {
+        "page": 781,
+        "label": "p.781 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "호기심",
+    "aliases": [
+      "Curiosity"
+    ],
+    "definition": "하나님의 비밀을 탐구하려는 인간의 욕구로, 예정론에 대한 논의에서 위험 요소로 지적된다.",
+    "sources": [
+      {
+        "page": 779,
+        "label": "p.779 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "영원한 선택",
+    "aliases": [
+      "Eternal Choice"
+    ],
+    "definition": "하나님이 시간의 시작 이전에 특정 개인을 구원하기 위해 선택한 행위로, 예정론의 핵심 개념이다.",
+    "sources": [
+      {
+        "page": 778,
+        "label": "p.778 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "구원의 소망",
+    "aliases": [
+      "Hope of Salvation"
+    ],
+    "definition": "하나님이 선택한 자들에게 주어지는 구원에 대한 확신과 기대를 의미하며, 예정론의 결과로 나타난다.",
+    "sources": [
+      {
+        "page": 778,
+        "label": "p.778 (3권 21장)"
+      }
+    ]
+  },
+  {
+    "term": "성례",
+    "aliases": [
+      "sacrament",
+      "sacramentum"
+    ],
+    "definition": "성례는 하나님의 은혜를 외형적인 표식으로 확인하는 증거이며, 하나님께 대한 우리의 충성을 확인하는 것이다.",
+    "sources": [
+      {
+        "page": 1064,
+        "label": "p.1064 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "어거스틴",
+    "aliases": [
+      "Augustine"
+    ],
+    "definition": "어거스틴은 성례를 '신성한 것의 보이는 표' 또는 '보이지 않는 은혜의 형태'로 정의하며, 성례의 본질을 설명하는 데 중요한 인물이다.",
+    "sources": [
+      {
+        "page": 1080,
+        "label": "p.1080 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "언약",
+    "aliases": [
+      "covenant"
+    ],
+    "definition": "하나님과 인간 사이의 약속으로, 성례는 이 언약의 표징으로서 기능하며 하나님의 약속을 확증한다.",
+    "sources": [
+      {
+        "page": 1073,
+        "label": "p.1073 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "믿음",
+    "aliases": [
+      "faith"
+    ],
+    "definition": "성례는 믿음을 강화하고 확립하는 수단으로 작용하며, 성례의 효과는 믿음에 의존한다.",
+    "sources": [
+      {
+        "page": 1065,
+        "label": "p.1065 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "약속",
+    "aliases": [
+      "promise"
+    ],
+    "definition": "하나님이 성례를 통해 제시하는 은혜의 내용으로, 성례는 이 약속을 시각적으로 확인하는 역할을 한다.",
+    "sources": [
+      {
+        "page": 1068,
+        "label": "p.1068 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "표징",
+    "aliases": [
+      "sign",
+      "symbol"
+    ],
+    "definition": "성례에서 사용되는 외형적 요소로, 하나님의 은혜를 나타내는 물질적 표현이다.",
+    "sources": [
+      {
+        "page": 1060,
+        "label": "p.1060 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "성령",
+    "aliases": [
+      "Holy Spirit"
+    ],
+    "definition": "성령은 성례의 효과를 발생시키는 주체로, 믿음을 강화하고 성례의 의미를 깨닫게 한다.",
+    "sources": [
+      {
+        "page": 1072,
+        "label": "p.1072 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "신비",
+    "aliases": [
+      "mystery"
+    ],
+    "definition": "성례의 본질적 요소로, 보이지 않는 은혜를 보이는 형태로 나타내는 신성한 진리이다.",
+    "sources": [
+      {
+        "page": 1060,
+        "label": "p.1060 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "이신칭의",
+    "aliases": [
+      "justification by faith"
+    ],
+    "definition": "믿음으로 의롭다 하심을 받는 교리로, 성례는 이 교리를 확증하는 역할을 한다.",
+    "sources": []
+  },
+  {
+    "term": "영적 은혜",
+    "aliases": [
+      "spiritual grace"
+    ],
+    "definition": "성례를 통해 제공되는 하나님의 은혜로, 성례는 이 은혜를 시각적으로 나타내는 수단이다.",
+    "sources": [
+      {
+        "page": 1067,
+        "label": "p.1067 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "구원",
+    "aliases": [
+      "salvation"
+    ],
+    "definition": "성례는 구원의 약속을 확증하며, 믿음을 통해 이 구원을 경험하게 한다.",
+    "sources": [
+      {
+        "page": 1061,
+        "label": "p.1061 (4권 14장)"
+      }
+    ]
+  },
+  {
+    "term": "신앙 고백",
+    "aliases": [
+      "confession of faith"
+    ],
+    "definition": "성례는 신자들이 하나님 앞에서 자신의 믿음을 고백하는 독특한 표지로 기능한다.",
     "sources": []
   }
 ]
