@@ -28,7 +28,17 @@ if str(_PROJECT_ROOT) not in sys.path:
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(_PROJECT_ROOT / ".env")
+    _env_path = _PROJECT_ROOT / ".env"
+    _loaded = load_dotenv(_env_path, override=True)
+    # 시연 디버그 — INVITE_CODES 활성 상태를 부팅 로그에서 즉시 확인 가능 (마스킹)
+    import os as _os
+
+    _invite_raw = _os.getenv("INVITE_CODES", "").strip()
+    _invite_count = len([c for c in _invite_raw.split(",") if c.strip()])
+    print(
+        f"[boot] .env loaded={_loaded} from={_env_path} INVITE_CODES count={_invite_count}",
+        flush=True,
+    )
 except ImportError:
     pass  # python-dotenv 미설치 시 스킵 — 운영 환경에선 OS env 가 직접 주입
 

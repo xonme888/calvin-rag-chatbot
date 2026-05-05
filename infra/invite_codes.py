@@ -16,16 +16,21 @@
 
 from __future__ import annotations
 
+import logging
 import os
-from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
 def _allowed_codes() -> frozenset[str]:
+    """매 호출 환경변수 재읽기 — uvicorn --reload + .env 변경에도 즉시 반영."""
     raw = os.getenv("INVITE_CODES", "").strip()
     if not raw:
         return frozenset()
-    return frozenset(c.strip() for c in raw.split(",") if c.strip())
+    # 콤마 구분 + 공백/탭/CR 제거 (.env 파싱 잔존 문자 방어)
+    return frozenset(
+        c.strip(" \t\r\n\"'") for c in raw.split(",") if c.strip(" \t\r\n\"'")
+    )
 
 
 def is_enforcement_enabled() -> bool:
@@ -40,11 +45,21 @@ def verify_code(code: str | None) -> bool:
         True — 유효 또는 검증 비활성
         False — 검증 활성 + 코드 없음 또는 화이트리스트 외
     """
-    if not is_enforcement_enabled():
+    allowed = _allowed_codes()
+    if not allowed:
         return True  # 개발 모드 — 모든 요청 통과
     if not code:
         return False
-    return code in _allowed_codes()
+    # 사용자 입력 공백/제어문자 제거
+    cleaned = code.strip(" \t\r\n\"'")
+    matched = cleaned in allowed
+    if not matched:
+        logger.warning(
+            "invite verify failed — input_len=%d allowed_count=%d",
+            len(cleaned),
+            len(allowed),
+        )
+    return matched
 
 
 def mask_code(code: str | None) -> str | None:
@@ -57,5 +72,5 @@ def mask_code(code: str | None) -> str | None:
 
 
 def reset_cache() -> None:
-    """테스트용 — 환경변수 변경 후 재로드."""
-    _allowed_codes.cache_clear()
+    """테스트 호환 — 캐시 제거 후 매 호출 환경변수 읽음. 호출은 noop."""
+    return None
