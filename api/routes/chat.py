@@ -77,8 +77,13 @@ def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
 
     우선순위:
     1. attachments 비어있지 않음 → 'vision' 강제 (mode 명시되어 있어도 override)
-    2. mode == 'auto' → route_question
+    2. mode == 'auto' → route_question + health fallback
     3. 그 외 → 그대로
+
+    Auto 라우팅 결과가 비활성 모드 (예: KG/Neo4j 미연결, Vision 환경변수 비활성)
+    면 hybrid 로 silent fallback. 사용자에겐 인프라 디테일 노출 안 함 — trace 에만 기록.
+
+    명시 모드 선택 (mode='kg' 등) 의 경우엔 fallback 없이 _invoke_sync 가 503 던짐.
 
     Returns:
         (resolved_req, was_auto) — was_auto 는 응답 metadata 의 auto_routed 표기.
@@ -92,13 +97,41 @@ def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
             attachment_count=len(req.attachments),
             client_mode=req.mode,
         )
+        # vision 도 비활성이면 hybrid fallback (이미지 내용은 무시되지만 답변은 옴)
+        if not _is_mode_available("vision"):
+            trace_event(
+                "router.fallback",
+                from_mode="vision",
+                to_mode="hybrid",
+                reason="vision unavailable",
+            )
+            return req.model_copy(update={"mode": "hybrid"}), True
         if req.mode != "vision":
             return req.model_copy(update={"mode": "vision"}), True
         return req, False
     if req.mode == "auto":
         routed = route_question(req.question)
+        # 라우팅 결과가 비활성이면 hybrid fallback (사용자에겐 503 안 보임)
+        if routed != "hybrid" and not _is_mode_available(routed):
+            trace_event(
+                "router.fallback",
+                from_mode=routed,
+                to_mode="hybrid",
+                reason=f"{routed} unavailable",
+            )
+            routed = "hybrid"
         return req.model_copy(update={"mode": routed}), True
     return req, False
+
+
+def _is_mode_available(mode_name: str) -> bool:
+    """ModeEntry.health 결과 — 등록 안 된 모드는 False."""
+    try:
+        entry = get_mode_entry(mode_name)
+    except KeyError:
+        return False
+    available, _ = entry.health()
+    return available
 
 
 def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
