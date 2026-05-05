@@ -146,6 +146,23 @@ register(
         health=_kg_health,
     )
 )
+def _vision_health() -> tuple[bool, str | None]:
+    """Vision 가용성 — VISION_ENABLED 환경변수로 운영 게이팅.
+
+    default true (현재 시연 단계). 외부 노출 시 false 로 설정해 비활성.
+    """
+    import os
+
+    enabled = os.getenv("VISION_ENABLED", "true").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+    if not enabled:
+        return False, "VISION_ENABLED=false 로 설정됨 (외부 노출 단계 비용 게이팅)"
+    return True, None
+
+
 register(
     ModeEntry(
         name="vision",
@@ -153,5 +170,6 @@ register(
         tracker_mode="Vision",
         factory=lambda: get_vision_rag(),
         sse_capable=False,
+        health=_vision_health,
     )
 )

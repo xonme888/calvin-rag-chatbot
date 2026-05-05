@@ -8,11 +8,12 @@ interface Props {
   attachments: Attachment[];
   onChange: (next: Attachment[]) => void;
   disabled?: boolean;
-  /** 단일 이미지 최대 크기 (bytes). 기본 5MB. */
+  /** 단일 이미지 최대 크기 (bytes). 기본 2MB (detail=low 라 충분). */
   maxBytes?: number;
 }
 
-const DEFAULT_MAX = 5 * 1024 * 1024;
+// 백엔드가 detail="low" 로 처리해 65토큰/이미지 — 큰 해상도 무의미
+const DEFAULT_MAX = 2 * 1024 * 1024;
 
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -46,7 +47,10 @@ export function AttachmentInput({
         continue;
       }
       if (file.size > maxBytes) {
-        setError(`${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB — 5MB 이하만`);
+        setError(
+          `${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB — ` +
+            `${(maxBytes / 1024 / 1024).toFixed(0)}MB 이하만`,
+        );
         continue;
       }
       try {

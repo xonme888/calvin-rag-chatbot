@@ -1,6 +1,6 @@
 """Vision RAG — 사용자 첨부 이미지에 대한 답변.
 
-목적: 사용자가 이미지를 첨부하면 OpenAI Vision (gpt-4o) 으로 해석 + 질문 응답.
+목적: 사용자가 이미지를 첨부하면 OpenAI Vision (gpt-4o-mini) 으로 해석 + 질문 응답.
 1단계 구현은 RAG 결합 없음 (이미지 단순 분석). 2단계에서 hybrid 검색 결합 가능.
 
 설계:
@@ -8,9 +8,11 @@
 - ModeEntry.factory → VisionRAG 인스턴스
 - chat.py _invoke_sync 가 attachments 를 query() 에 전달
 
-비용 (TRD-1 §2.4 위험):
-- gpt-4o vision: 이미지 1장당 ~₩30~150 (해상도 의존)
-- budget cap (PRD-4) + circuit breaker 가 폭주 방어
+비용 가드 (TRD-1 §2.4):
+- ``image_url detail="low"`` 강제 — 이미지 1장 = 65 토큰 (~₩0.1, gpt-4o-mini)
+  high 모드 대비 1/10~1/30 비용. 본문 인식엔 부족하나 신학 도식·인물 사진엔 충분.
+- ``VISION_ENABLED=false`` 환경변수로 모드 자체 비활성 가능 (외부 노출 시 게이팅).
+- budget cap (PRD-4) + circuit breaker 가 폭주 방어.
 """
 
 from __future__ import annotations
@@ -75,7 +77,14 @@ class VisionRAG:
             url = att.get("data_url") if isinstance(att, dict) else getattr(att, "data_url", None)
             if not url:
                 continue
-            content.append({"type": "image_url", "image_url": {"url": url}})
+            # detail="low": 이미지 1장 = 65 토큰 고정 (~₩0.1)
+            # 비용 폭주 방어 — 신학 도식/인물 사진 인식엔 충분.
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": url, "detail": "low"},
+                }
+            )
 
         invoke_config: dict[str, Any] = {}
         if callbacks:
