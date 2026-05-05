@@ -23,6 +23,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# .env 로드 — Pydantic Settings 외 모듈 (infra.invite_codes 등 os.getenv 사용) 도 읽도록
+# import 이전에 호출해야 환경변수가 모듈 import 시점부터 보인다.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_PROJECT_ROOT / ".env")
+except ImportError:
+    pass  # python-dotenv 미설치 시 스킵 — 운영 환경에선 OS env 가 직접 주입
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
