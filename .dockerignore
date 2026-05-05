@@ -26,11 +26,12 @@ indexes/
 *.pkl
 
 # Docs / Tests / Web (분리 배포)
+# README.md 는 Dockerfile 의 `COPY README.md ./` 에 필요하므로 제외 X.
+# (HF Space frontmatter + pyproject 메타데이터에서 사용)
 docs/
 tests/
 web/
 .github/
-README.md
 
 # Git
 .git/
