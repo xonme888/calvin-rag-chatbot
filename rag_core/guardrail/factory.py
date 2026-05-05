@@ -41,8 +41,10 @@ def _try_load_moderation() -> GuardrailPort | None:
 
 @lru_cache(maxsize=1)
 def get_input_guardrail() -> GuardrailPort:
-    """입력 가드 — Length + (선택) OpenAI Moderation."""
-    guards: list[GuardrailPort] = [LengthGuard(max_chars=2000)]
+    """입력 가드 — Length + Dump request + (선택) OpenAI Moderation."""
+    from rag_core.guardrail.dump_guard import DumpGuard
+
+    guards: list[GuardrailPort] = [LengthGuard(max_chars=2000), DumpGuard()]
     moderation = _try_load_moderation()
     if moderation is not None:
         guards.append(moderation)
