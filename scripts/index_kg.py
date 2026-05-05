@@ -140,8 +140,8 @@ def main() -> None:
     final_stats = adapter.stats()
     print(f"\n완료: {indexed}청크 인덱싱, {elapsed:.1f}초 소요")
     print(f"  최종 그래프 상태: {final_stats}")
-    print(f"  Neo4j Browser: http://localhost:7474")
-    print(f"  Cypher 예시: MATCH (n:__Entity__) RETURN n LIMIT 25")
+    print("  Neo4j Browser: http://localhost:7474")
+    print("  Cypher 예시: MATCH (n:__Entity__) RETURN n LIMIT 25")
 
 
 if __name__ == "__main__":

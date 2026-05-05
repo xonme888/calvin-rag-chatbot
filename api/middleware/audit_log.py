@@ -48,9 +48,7 @@ class AuditRecord:
     previous_mode: str | None = None  # '다른 모드로 재시도' 직전 모드
     user_overrode: bool = False  # 사용자가 명시적으로 다른 모드 선택했는지
     invite_code: str | None = None  # 초대 코드 (마스킹된 형태)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
 
 def _ensure_schema(db_path: Path) -> None:
@@ -88,12 +86,8 @@ def _ensure_schema(db_path: Path) -> None:
             except sqlite3.OperationalError:
                 # 이미 존재 — 무시
                 pass
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_audit_trace_id ON audit_log(trace_id)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_trace_id ON audit_log(trace_id)")
         conn.commit()
 
 
@@ -152,9 +146,7 @@ def fetch_recent(limit: int = 100, db_path: Path | None = None) -> list[dict[str
     _ensure_schema(path)
     with _connect(path) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
 

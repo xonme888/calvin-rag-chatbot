@@ -45,15 +45,40 @@ _DEFAULT_OUT = _PROJECT_ROOT / "data" / "glossary" / "calvin.json"
 # tooltip 이 노이즈가 됨). KG 가 추출해도 export 단계에서 제외.
 _GENERIC_BLACKLIST: frozenset[str] = frozenset(
     {
-        "하나님", "그리스도", "예수", "예수님", "예수 그리스도",
-        "성경", "하나님의 말씀", "말씀",
-        "신앙", "믿음", "신앙심",
-        "기독교", "기독교인", "교인",
-        "구원", "구원자",
-        "아버지", "주", "주님", "주의",
-        "사람", "사람들", "인간", "우리",
-        "God", "Lord", "Christ", "Jesus", "Father", "Son", "Holy Spirit",
-        "Bible", "Scripture", "Word",
+        "하나님",
+        "그리스도",
+        "예수",
+        "예수님",
+        "예수 그리스도",
+        "성경",
+        "하나님의 말씀",
+        "말씀",
+        "신앙",
+        "믿음",
+        "신앙심",
+        "기독교",
+        "기독교인",
+        "교인",
+        "구원",
+        "구원자",
+        "아버지",
+        "주",
+        "주님",
+        "주의",
+        "사람",
+        "사람들",
+        "인간",
+        "우리",
+        "God",
+        "Lord",
+        "Christ",
+        "Jesus",
+        "Father",
+        "Son",
+        "Holy Spirit",
+        "Bible",
+        "Scripture",
+        "Word",
     }
 )
 # Glossary 항목 길이 한도 — 8자 넘는 term 은 phrase 일 가능성 높음
@@ -153,12 +178,10 @@ def _build_kg_glossary(adapter: Any) -> list[dict[str, Any]]:
 
     try:
         from rag_core.kg.entity_normalizer import (
-            ENTITY_ALIASES,
             is_noise_entity,
             normalize_entity_id,
         )
     except ImportError:
-        ENTITY_ALIASES = {}
         normalize_entity_id = lambda x: x.strip()  # noqa: E731
         is_noise_entity = lambda x: False  # noqa: E731
 
@@ -211,9 +234,7 @@ def _build_kg_glossary(adapter: Any) -> list[dict[str, Any]]:
             if page_int in existing_pages:
                 continue
             label_str = section_labels[i] if i < len(section_labels) else ""
-            entry["sources"].append(
-                {"page": page_int, "label": _make_label(page_int, label_str)}
-            )
+            entry["sources"].append({"page": page_int, "label": _make_label(page_int, label_str)})
             existing_pages.add(page_int)
 
     # alias dedup

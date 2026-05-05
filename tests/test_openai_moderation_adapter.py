@@ -13,7 +13,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
 from pydantic import SecretStr
 
 from rag_core.guardrail.openai_moderation_adapter import OpenAIModerationAdapter

@@ -20,8 +20,6 @@ import os
 import re
 from typing import Iterable
 
-from rag_core.tools.policy import ToolPolicy
-from rag_core.tools.registry import register_tool
 
 logger = logging.getLogger(__name__)
 

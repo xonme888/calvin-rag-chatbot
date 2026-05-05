@@ -13,9 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.dependencies import (
-    get_agentic_rag,
-    get_hybrid_rag,
-    get_kg_rag_or_none,
     reset_dependency_cache,
 )
 from api.main import app
@@ -120,7 +117,9 @@ def _make_mock_hybrid(answer: str = "mocked answer", sources: list[str] | None =
     class _MockHybrid:
         config = SimpleNamespace(dense_weight=0.5)
 
-        def query(self, question: str, chat_history: list | None = None, callbacks: list | None = None) -> dict:
+        def query(
+            self, question: str, chat_history: list | None = None, callbacks: list | None = None
+        ) -> dict:
             return {
                 "final_answer": answer,
                 "source_documents": sources,

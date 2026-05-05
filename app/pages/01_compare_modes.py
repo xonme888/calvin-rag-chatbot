@@ -37,6 +37,7 @@ _DEFAULT_MODEL = "gpt-4o-mini"
 # ============================================
 st.set_page_config(page_title="3 모드 비교", layout="wide")
 
+
 # ============================================
 # 캐시된 RAG 인스턴스 — 메인 페이지와 별도 캐시 (Streamlit cache_resource는 페이지별 격리)
 # ============================================
@@ -193,9 +194,7 @@ else:
             st.caption(f"응답 시간 {result.elapsed:.2f}초")
 
             # 출력 가드 — 모드별 답변에 동일 적용
-            out_decision = output_guard.check(
-                result.answer, GuardrailDirection.OUTPUT
-            )
+            out_decision = output_guard.check(result.answer, GuardrailDirection.OUTPUT)
             if not out_decision.allow:
                 st.warning("답변이 정책에 의해 필터링되었습니다.")
                 continue

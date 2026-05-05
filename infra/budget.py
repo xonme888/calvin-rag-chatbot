@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import os
 import time
-from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 
 # role 별 일일 한도 (input + output 합산)

@@ -74,13 +74,10 @@ class Neo4jAdapter:
             인덱싱된 청크 수.
         """
         try:
-            from langchain_core.messages import SystemMessage
             from langchain_experimental.graph_transformers import LLMGraphTransformer
             from langchain_openai import ChatOpenAI
         except ImportError as e:
-            raise ImportError(
-                "langchain-experimental 또는 langchain-openai가 필요합니다."
-            ) from e
+            raise ImportError("langchain-experimental 또는 langchain-openai가 필요합니다.") from e
 
         llm = ChatOpenAI(
             model=self.config.openai_model,
@@ -92,8 +89,13 @@ class Neo4jAdapter:
             llm=llm,
             allowed_nodes=["Concept", "Person", "Doctrine", "Event"],
             allowed_relationships=[
-                "DEFINES", "OPPOSES", "INFLUENCES", "CITES",
-                "RELATED_TO", "PART_OF", "CONTRADICTS",
+                "DEFINES",
+                "OPPOSES",
+                "INFLUENCES",
+                "CITES",
+                "RELATED_TO",
+                "PART_OF",
+                "CONTRADICTS",
             ],
             node_properties=["description"],
             relationship_properties=False,
@@ -111,7 +113,7 @@ class Neo4jAdapter:
             self._graph.add_graph_documents(
                 graph_documents,
                 baseEntityLabel=True,  # 모든 노드에 ``__Entity__`` 라벨 추가
-                include_source=True,    # 원본 청크도 노드로 보존 (출처 추적)
+                include_source=True,  # 원본 청크도 노드로 보존 (출처 추적)
             )
             indexed += len(batch)
             if progress_callback:
@@ -160,13 +162,15 @@ class Neo4jAdapter:
             o_id = row["o"]
             if s_id not in nodes_by_id:
                 nodes_by_id[s_id] = GraphNode(
-                    id=s_id, label=s_id,
+                    id=s_id,
+                    label=s_id,
                     type=Neo4jAdapter._pick_type(row.get("s_labels", [])),
                     properties={"description": row.get("s_desc", "")},
                 )
             if o_id not in nodes_by_id:
                 nodes_by_id[o_id] = GraphNode(
-                    id=o_id, label=o_id,
+                    id=o_id,
+                    label=o_id,
                     type=Neo4jAdapter._pick_type(row.get("o_labels", [])),
                     properties={"description": row.get("o_desc", "")},
                 )
@@ -193,8 +197,7 @@ class Neo4jAdapter:
     def stats(self) -> dict[str, int]:
         """노드/엣지 수 반환."""
         result = self._graph.query(
-            "MATCH (n) WITH count(n) AS nodes "
-            "MATCH ()-[r]->() RETURN nodes, count(r) AS edges"
+            "MATCH (n) WITH count(n) AS nodes MATCH ()-[r]->() RETURN nodes, count(r) AS edges"
         )
         if not result:
             return {"nodes": 0, "edges": 0}

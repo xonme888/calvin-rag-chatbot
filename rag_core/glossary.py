@@ -70,9 +70,7 @@ def load_glossary() -> tuple[GlossaryTerm, ...]:
         term = str(entry.get("term", "")).strip()
         if not term:
             continue
-        aliases = tuple(
-            str(a).strip() for a in entry.get("aliases", []) if str(a).strip()
-        )
+        aliases = tuple(str(a).strip() for a in entry.get("aliases", []) if str(a).strip())
         definition = str(entry.get("definition", "")).strip()
         sources = tuple(
             TermSource(page=int(s.get("page", 0)), label=str(s.get("label", "")))

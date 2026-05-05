@@ -190,9 +190,7 @@ class KnowledgeGraphRAG:
 
         # 2) KG 부분 그래프
         subgraph: SubgraphData = (
-            self.kg.get_subgraph(entities, hops=self.subgraph_hops)
-            if entities
-            else SubgraphData()
+            self.kg.get_subgraph(entities, hops=self.subgraph_hops) if entities else SubgraphData()
         )
         graph_text = _format_subgraph_for_llm(subgraph)
 
@@ -221,9 +219,7 @@ class KnowledgeGraphRAG:
         from rag_core.citation_label import labels_for_pages
         from rag_core.followup import generate_followups
 
-        source_pages: list[int | None] = [
-            d.metadata.get("page") for d in top_docs
-        ]
+        source_pages: list[int | None] = [d.metadata.get("page") for d in top_docs]
         return {
             "final_answer": answer,
             "source_documents": [d.page_content for d in top_docs],

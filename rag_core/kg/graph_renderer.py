@@ -7,16 +7,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from rag_core.kg.port import GraphEdge, GraphNode, SubgraphData
+from rag_core.kg.port import GraphNode, SubgraphData
 
 # 노드 타입별 색상 (시각적 구분용)
 NODE_COLOR_BY_TYPE: dict[str, str] = {
-    "Concept": "#4F46E5",     # 인디고 — 신학 개념
-    "Person": "#DC2626",      # 빨강 — 인물 (어거스틴, 펠라기우스 등)
-    "Doctrine": "#059669",    # 초록 — 교리
-    "Event": "#D97706",       # 주황 — 사건
-    "Document": "#6B7280",    # 회색 — 출처 (원본 청크)
-    "Entity": "#3B82F6",      # 파랑 — 분류 미상 (fallback)
+    "Concept": "#4F46E5",  # 인디고 — 신학 개념
+    "Person": "#DC2626",  # 빨강 — 인물 (어거스틴, 펠라기우스 등)
+    "Doctrine": "#059669",  # 초록 — 교리
+    "Event": "#D97706",  # 주황 — 사건
+    "Document": "#6B7280",  # 회색 — 출처 (원본 청크)
+    "Entity": "#3B82F6",  # 파랑 — 분류 미상 (fallback)
 }
 
 DEFAULT_NODE_COLOR = "#3B82F6"

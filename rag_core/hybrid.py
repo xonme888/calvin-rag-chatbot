@@ -267,9 +267,7 @@ class HybridRAG:
             "rrf_top_scores": [round(s, 4) for _, s in fused[:5]],
             "dense_weight": self.config.dense_weight,
             "source_pages": [d.metadata.get("page") for d in top_docs],
-            "source_pages_label": labels_for_pages(
-                [d.metadata.get("page") for d in top_docs]
-            ),
+            "source_pages_label": labels_for_pages([d.metadata.get("page") for d in top_docs]),
             "confidence": response.confidence,
             "cited_pages": response.cited_pages,
             "is_grounded": None,  # Self-RAG에서 채워짐
@@ -552,9 +550,7 @@ class HybridRAG:
         from rag_core.citation_label import labels_for_pages
         from rag_core.followup import generate_followups
 
-        source_pages_label = labels_for_pages(
-            [d.metadata.get("page") for d in top_docs]
-        )
+        source_pages_label = labels_for_pages([d.metadata.get("page") for d in top_docs])
         self._last_metadata = {
             "pattern": self.PATTERN_NAME,
             "bm25_count": len(bm25_results),

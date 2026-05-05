@@ -25,16 +25,29 @@ _VALID_MODES = ("hybrid", "agentic", "kg")
 
 # 도메인 특화 키워드 — 칼빈/기독교 강요 챗봇용
 _KG_HINTS: tuple[str, ...] = (
-    "관계", "영향", "사이",
-    "어떤 인물", "누가", "그래프", "연결",
-    "네트워크", "계보",
+    "관계",
+    "영향",
+    "사이",
+    "어떤 인물",
+    "누가",
+    "그래프",
+    "연결",
+    "네트워크",
+    "계보",
 )
 # 주: "관련" 은 일반어로 빈번하게 등장 (예: "오늘 칼빈 관련 최신") — KG 힌트에서 제외
 
 _AGENTIC_HINTS: tuple[str, ...] = (
-    "최신", "오늘", "최근", "현재",
-    "비교", "차이", "다른",  # "다른가/다른지/다른가요" 류 비교 의문문
-    "검색", "찾아", "조회",
+    "최신",
+    "오늘",
+    "최근",
+    "현재",
+    "비교",
+    "차이",
+    "다른",  # "다른가/다른지/다른가요" 류 비교 의문문
+    "검색",
+    "찾아",
+    "조회",
 )
 
 
@@ -135,9 +148,7 @@ def _classify_with_llm(question: str) -> Mode | None:
         from pydantic import BaseModel, Field
 
         class _RouteSchema(BaseModel):
-            mode: Literal["hybrid", "agentic", "kg"] = Field(
-                description="결정된 RAG 모드"
-            )
+            mode: Literal["hybrid", "agentic", "kg"] = Field(description="결정된 RAG 모드")
 
         prompt = ChatPromptTemplate.from_messages(
             [

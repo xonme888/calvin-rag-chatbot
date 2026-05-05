@@ -107,7 +107,7 @@ def test_filter_chunks_by_sections_includes_section_pages() -> None:
     chunks = [
         Document(page_content="예정론 도입", metadata={"page": 777}),  # 1-indexed 778, 3권 21장
         Document(page_content="아무 페이지", metadata={"page": 1000}),  # 1001, 어떤 단원도 아님
-        Document(page_content="삼위일체", metadata={"page": 137}),       # 138, 1권 13장
+        Document(page_content="삼위일체", metadata={"page": 137}),  # 138, 1권 13장
     ]
     filtered = filter_chunks_by_sections(chunks)
     assert len(filtered) == 2
@@ -119,9 +119,9 @@ def test_filter_chunks_by_sections_includes_section_pages() -> None:
 def test_filter_chunks_excludes_pages_outside_sections() -> None:
     """5단원 외 페이지는 제외."""
     chunks = [
-        Document(page_content="x", metadata={"page": 50}),    # 51 — 1권 1장 (제외)
-        Document(page_content="y", metadata={"page": 500}),   # 501 — 3권 1장 (제외)
-        Document(page_content="z", metadata={"page": 850}),   # 851 — 4권 1장 (제외)
+        Document(page_content="x", metadata={"page": 50}),  # 51 — 1권 1장 (제외)
+        Document(page_content="y", metadata={"page": 500}),  # 501 — 3권 1장 (제외)
+        Document(page_content="z", metadata={"page": 850}),  # 851 — 4권 1장 (제외)
     ]
     filtered = filter_chunks_by_sections(chunks)
     assert filtered == []

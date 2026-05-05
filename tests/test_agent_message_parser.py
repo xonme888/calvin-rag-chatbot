@@ -22,7 +22,9 @@ from rag_core.agentic import (
 def test_parse_extracts_final_answer_from_last_aimessage_with_content() -> None:
     msgs = [
         HumanMessage(content="질문"),
-        AIMessage(content="", tool_calls=[{"name": "search_documents", "args": {"query": "Q"}, "id": "1"}]),
+        AIMessage(
+            content="", tool_calls=[{"name": "search_documents", "args": {"query": "Q"}, "id": "1"}]
+        ),
         ToolMessage(content="검색 결과", name="search_documents", tool_call_id="1"),
         AIMessage(content="최종 답변입니다."),
     ]
@@ -32,10 +34,13 @@ def test_parse_extracts_final_answer_from_last_aimessage_with_content() -> None:
 
 def test_parse_collects_tool_calls() -> None:
     msgs = [
-        AIMessage(content="", tool_calls=[
-            {"name": "search_documents", "args": {"query": "예정론"}, "id": "1"},
-            {"name": "search_documents", "args": {"query": "어거스틴"}, "id": "2"},
-        ]),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "search_documents", "args": {"query": "예정론"}, "id": "1"},
+                {"name": "search_documents", "args": {"query": "어거스틴"}, "id": "2"},
+            ],
+        ),
     ]
     parsed = parse_agent_messages(msgs)
     assert len(parsed.tool_calls) == 2

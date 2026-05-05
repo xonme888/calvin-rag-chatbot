@@ -150,7 +150,9 @@ class LangChainTracer(BaseCallbackHandler):
         self._record_end(run_id, "chain.end", output_keys=list(outputs.keys())[:5])
 
     def on_chain_error(self, error: BaseException, *, run_id: Any, **_: Any) -> None:
-        self._record_end(run_id, "chain.error", error=type(error).__name__, message=str(error)[:200])
+        self._record_end(
+            run_id, "chain.error", error=type(error).__name__, message=str(error)[:200]
+        )
 
     # ---- llm ----
     def on_llm_start(

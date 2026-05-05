@@ -27,7 +27,7 @@ class ModeEntry:
     factory: Callable[[], Any]  # 싱글톤 인스턴스 반환 함수 (None 가능)
     sse_capable: bool = False  # SSE 토큰 스트리밍 지원 여부
     health: Callable[[], tuple[bool, Optional[str]]] = field(
-        default_factory=lambda: (lambda: (True, None))
+        default_factory=lambda: lambda: (True, None)
     )
     """가용성 검사 — (available, reason). reason 은 비활성 시 사용자 안내."""
 

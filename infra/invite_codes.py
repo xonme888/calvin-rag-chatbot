@@ -28,9 +28,7 @@ def _allowed_codes() -> frozenset[str]:
     if not raw:
         return frozenset()
     # 콤마 구분 + 공백/탭/CR 제거 (.env 파싱 잔존 문자 방어)
-    return frozenset(
-        c.strip(" \t\r\n\"'") for c in raw.split(",") if c.strip(" \t\r\n\"'")
-    )
+    return frozenset(c.strip(" \t\r\n\"'") for c in raw.split(",") if c.strip(" \t\r\n\"'"))
 
 
 def is_enforcement_enabled() -> bool:

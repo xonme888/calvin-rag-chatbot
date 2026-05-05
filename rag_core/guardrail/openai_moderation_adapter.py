@@ -39,18 +39,14 @@ class OpenAIModerationAdapter:
             try:
                 from openai import OpenAI
             except ImportError as e:
-                raise ImportError(
-                    "openai 패키지가 필요합니다. pyproject.toml 확인."
-                ) from e
+                raise ImportError("openai 패키지가 필요합니다. pyproject.toml 확인.") from e
             self._client = OpenAI(api_key=self.api_key.get_secret_value())
         return self._client
 
     def check(self, text: str, direction: GuardrailDirection) -> GuardrailDecision:
         # 외부 API 호출은 try/except — fail-open 정책
         try:
-            response = self._ensure_client().moderations.create(
-                model=self.model, input=text
-            )
+            response = self._ensure_client().moderations.create(model=self.model, input=text)
             result = response.results[0]
         except Exception as e:  # noqa: BLE001
             # 가드 실패 = 서비스 죽이지 않음. 단 audit log 로 모니터링 가능

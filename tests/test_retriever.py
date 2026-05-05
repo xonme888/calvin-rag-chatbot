@@ -87,8 +87,8 @@ def test_reciprocal_rank_fusion_combines_ranks() -> None:
     b = Document(page_content="B", metadata={})
     c = Document(page_content="C", metadata={})
 
-    bm25 = [(a, 10.0), (b, 5.0), (c, 1.0)]    # A 1위
-    dense = [(a, 0.9), (b, 0.5), (c, 0.1)]    # A 1위
+    bm25 = [(a, 10.0), (b, 5.0), (c, 1.0)]  # A 1위
+    dense = [(a, 0.9), (b, 0.5), (c, 0.1)]  # A 1위
     fused = r.reciprocal_rank_fusion(bm25, dense)
     assert fused[0][0].page_content == "A"  # 양쪽 1위 → 최상위
 

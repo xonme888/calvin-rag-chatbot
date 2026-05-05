@@ -31,7 +31,7 @@ class CalvinSection:
     chapter: int
     label: str
     page_start: int  # 1-indexed, inclusive
-    page_end: int    # 1-indexed, inclusive
+    page_end: int  # 1-indexed, inclusive
     description: str = ""
 
     @property
@@ -48,28 +48,43 @@ class CalvinSection:
 # 이 정의를 환경별로 바꾸려면 KG_SECTION_PAGES env 또는 외부 JSON 주입을 추가.
 DEFAULT_CALVIN_SECTIONS: tuple[CalvinSection, ...] = (
     CalvinSection(
-        book=1, chapter=13, label="삼위일체론",
-        page_start=136, page_end=169,
+        book=1,
+        chapter=13,
+        label="삼위일체론",
+        page_start=136,
+        page_end=169,
         description="한 본체 안의 삼위 — 성부, 성자, 성령의 동일 본질과 구별",
     ),
     CalvinSection(
-        book=2, chapter=2, label="자유의지",
-        page_start=246, page_end=272,
+        book=2,
+        chapter=2,
+        label="자유의지",
+        page_start=246,
+        page_end=272,
         description="타락한 인간의 자유의지 — 펠라기우스 비판, 어거스틴 계승",
     ),
     CalvinSection(
-        book=3, chapter=11, label="이신칭의",
-        page_start=618, page_end=640,
+        book=3,
+        chapter=11,
+        label="이신칭의",
+        page_start=618,
+        page_end=640,
         description="믿음으로 의롭게 된다 — 칭의의 정의, 행위와의 관계",
     ),
     CalvinSection(
-        book=3, chapter=21, label="예정론(서론)",
-        page_start=778, page_end=786,
+        book=3,
+        chapter=21,
+        label="예정론(서론)",
+        page_start=778,
+        page_end=786,
         description="예정 교리의 필요성과 위험 — 칼빈 신학의 정수",
     ),
     CalvinSection(
-        book=4, chapter=14, label="성례(총론)",
-        page_start=1060, page_end=1080,
+        book=4,
+        chapter=14,
+        label="성례(총론)",
+        page_start=1060,
+        page_end=1080,
         description="성례의 정의와 본질 — 보이는 말씀, 외형적 표징",
     ),
 )
@@ -110,9 +125,7 @@ def filter_chunks_by_sections(
                     "section_book": section.book,
                     "section_chapter": section.chapter,
                 }
-                filtered.append(
-                    Document(page_content=chunk.page_content, metadata=new_metadata)
-                )
+                filtered.append(Document(page_content=chunk.page_content, metadata=new_metadata))
                 break
     return filtered
 

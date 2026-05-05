@@ -22,14 +22,10 @@ from typing import Final
 _RRN = re.compile(r"\b(\d{2}[01]\d[0-3]\d)-(\d{7})\b")
 
 # 한국 휴대폰 — 010/011/016/017/018/019-XXXX-XXXX (- 또는 공백 또는 없음)
-_PHONE = re.compile(
-    r"\b(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})\b"
-)
+_PHONE = re.compile(r"\b(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})\b")
 
 # 이메일 — 보수적 패턴 (RFC 5322 완전 대응 X, 일반 케이스만)
-_EMAIL = re.compile(
-    r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
-)
+_EMAIL = re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")
 
 # IPv4 — 0~255 4 옥텟
 _IPV4 = re.compile(

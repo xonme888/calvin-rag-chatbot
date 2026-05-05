@@ -30,9 +30,7 @@ def _resolve_calvin_pdf_path() -> Path:
     """
     # macOS 에디터/터미널 복붙 시 흔한 보이지 않는 문자 모두 제거:
     # NBSP (U+00A0), ZWSP (U+200B), BOM (U+FEFF), 일반 공백/탭/CR/LF/따옴표
-    env_path = os.getenv("CALVIN_PDF_PATH", "").strip(
-        " \t\r\n\"' ​﻿"
-    )
+    env_path = os.getenv("CALVIN_PDF_PATH", "").strip(" \t\r\n\"' ​﻿")
     if env_path:
         return Path(env_path).expanduser().resolve()
     return DATA_DIR / "calvin" / "calvin_institutes.pdf"

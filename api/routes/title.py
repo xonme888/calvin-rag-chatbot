@@ -29,9 +29,7 @@ class TitleResponse(BaseModel):
 
 @router.post("/title", response_model=TitleResponse)
 @limiter.limit("30/minute;500/day")
-async def generate_session_title(
-    request: Request, req: TitleRequest
-) -> TitleResponse:
+async def generate_session_title(request: Request, req: TitleRequest) -> TitleResponse:
     """질문+답변 → 6~30자 한국어 제목. 실패 시 빈 문자열."""
     llm = get_hybrid_rag().llm
     # 동기 LLM 호출을 ThreadPool 로 비차단 변환

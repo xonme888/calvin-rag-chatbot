@@ -55,6 +55,7 @@ def probe_openai() -> ProbeResult:
 
 def probe_neo4j() -> ProbeResult:
     """Neo4j 어댑터 health_check + 그래프 비어있는지."""
+
     def _do() -> tuple[bool, str | None]:
         try:
             from rag_core.kg.factory import get_kg_adapter

@@ -144,9 +144,7 @@ def _to_langchain_history(messages: list[ChatMessage]) -> list[BaseMessage]:
     return history
 
 
-def _invoke_sync(
-    req: ChatRequest, trace_id: str | None = None
-) -> dict[str, Any]:
+def _invoke_sync(req: ChatRequest, trace_id: str | None = None) -> dict[str, Any]:
     """모드별 동기 RAG 호출 — ThreadPool 안에서 실행될 함수.
 
     Registry 에서 ModeEntry 를 조회하고 health → factory → query 순으로 호출한다.
@@ -182,9 +180,7 @@ def _invoke_sync(
         if req.mode == "hybrid":
             rag.config.dense_weight = req.dense_weight
             history = _to_langchain_history(req.chat_history)
-            return breaker.call(
-                rag.query, req.question, chat_history=history, callbacks=callbacks
-            )
+            return breaker.call(rag.query, req.question, chat_history=history, callbacks=callbacks)
         if req.mode == "vision":
             attachments = [a.model_dump() for a in req.attachments]
             return breaker.call(
@@ -382,9 +378,7 @@ async def _stream_chat_events(
     yield {"event": "done", "data": "[DONE]"}
 
 
-async def _stream_hybrid(
-    req: ChatRequest, was_auto: bool = False, trace_id: str | None = None
-):
+async def _stream_hybrid(req: ChatRequest, was_auto: bool = False, trace_id: str | None = None):
     """Hybrid stream_query 를 async 변환해 토큰 단위 SSE.
 
     Stream 종료 후 ``event: meta`` 1회 emit — cited_pages, source_pages_label,
@@ -440,9 +434,7 @@ async def _stream_hybrid(
     }
 
 
-async def _stream_sync_replay(
-    req: ChatRequest, was_auto: bool, trace_id: str | None = None
-):
+async def _stream_sync_replay(req: ChatRequest, was_auto: bool, trace_id: str | None = None):
     """Agentic/KG: 동기 호출 후 답변을 청크 단위로 흘려보냄.
 
     Stream 종료 후 ``event: meta`` 1회 emit — Hybrid 와 동일 envelope 로
@@ -491,9 +483,7 @@ def _build_stream_meta_payload(
     mode_stats = stats.by_mode.get(tracker_key)
     # 글로서리 매칭 — 답변 텍스트가 있을 때만 (Hybrid stream 은 answer_full,
     # sync_replay 는 source_documents 와 분리된 final_answer 가 있어 별도 처리)
-    answer_text = (
-        result_metadata.get("answer_full", "") or " ".join(source_documents)[:0]
-    )
+    answer_text = result_metadata.get("answer_full", "") or " ".join(source_documents)[:0]
     if not answer_text and result_metadata.get("final_answer"):
         answer_text = result_metadata["final_answer"]
     from rag_core.glossary import find_terms_in

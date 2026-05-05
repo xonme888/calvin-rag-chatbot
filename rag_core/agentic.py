@@ -117,7 +117,7 @@ def message_to_stream_events(msg: BaseMessage) -> Iterator[dict[str, Any]]:
 
 # TrackedInMemoryCache 는 infra/llm_cache.py 로 이동 — 3 모드 공유 싱글톤.
 # 하위 호환을 위해 alias 유지.
-from infra.llm_cache import TrackedInMemoryCache  # noqa: F401
+from infra.llm_cache import TrackedInMemoryCache  # noqa: F401, E402
 
 
 class LLMCallTracker(BaseCallbackHandler):
@@ -346,9 +346,7 @@ class AgenticRAG:
                 "source_pages": source_pages,
                 "source_pages_label": [None] * len(source_pages),
                 "subgraph": None,
-                "suggested_followups": generate_followups(
-                    question, parsed.final_answer, self.llm
-                ),
+                "suggested_followups": generate_followups(question, parsed.final_answer, self.llm),
             },
         }
 
@@ -401,9 +399,7 @@ class AgenticRAG:
                     for event in message_to_stream_events(msg):
                         # internal 누적 — UI 표시 후 metadata에 보관
                         if event["type"] == "thinking":
-                            tool_calls.append(
-                                {"tool": event["tool"], "args": event["args"]}
-                            )
+                            tool_calls.append({"tool": event["tool"], "args": event["args"]})
                         elif event["type"] == "tool_result":
                             source_docs.append(event["source_doc"])
                         elif event["type"] == "answer":

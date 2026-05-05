@@ -146,6 +146,8 @@ register(
         health=_kg_health,
     )
 )
+
+
 def _vision_health() -> tuple[bool, str | None]:
     """Vision 가용성 — VISION_ENABLED 환경변수로 운영 게이팅.
 

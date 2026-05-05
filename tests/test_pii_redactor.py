@@ -35,10 +35,7 @@ def test_휴대폰_마스킹(text: str):
 
 # ---- 이메일 ----
 def test_이메일_마스킹():
-    assert (
-        redact("문의는 user@example.com 으로")
-        == "문의는 [REDACTED:email] 으로"
-    )
+    assert redact("문의는 user@example.com 으로") == "문의는 [REDACTED:email] 으로"
 
 
 # ---- IPv4 ----

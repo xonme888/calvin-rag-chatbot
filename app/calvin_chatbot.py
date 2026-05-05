@@ -256,7 +256,7 @@ def _render_kg_meta(
                 )
                 st.caption(f"노드 분포: {data['summary']['type_breakdown']}")
         except ImportError:
-            with st.expander(f"부분 그래프 (텍스트 표현)"):
+            with st.expander("부분 그래프 (텍스트 표현)"):
                 for edge in subgraph.edges[:20]:
                     st.text(f"({edge.source}) -[{edge.label}]-> ({edge.target})")
 

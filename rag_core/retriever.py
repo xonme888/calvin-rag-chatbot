@@ -36,9 +36,7 @@ class RetrieverPort(Protocol):
         """질문에 대한 top-k 문서 반환. 점수 없이 문서만."""
         ...
 
-    def retrieve_with_scores(
-        self, question: str, k: int = 5
-    ) -> list[tuple[Document, float]]:
+    def retrieve_with_scores(self, question: str, k: int = 5) -> list[tuple[Document, float]]:
         """top-k 문서 + 점수. 메타데이터/디버깅에 활용."""
         ...
 
@@ -114,9 +112,7 @@ class HybridRetriever:
     def retrieve(self, question: str, k: int = 5) -> list[Document]:
         return [doc for doc, _ in self.retrieve_with_scores(question, k=k)]
 
-    def retrieve_with_scores(
-        self, question: str, k: int = 5
-    ) -> list[tuple[Document, float]]:
+    def retrieve_with_scores(self, question: str, k: int = 5) -> list[tuple[Document, float]]:
         _, _, fused = self.retrieve_split(question, k=k)
         return fused[:k]
 

@@ -52,9 +52,7 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="이전 대화 메시지 (멀티턴, Hybrid 모드만 활용)",
     )
-    dense_weight: float = Field(
-        default=0.5, ge=0.0, le=1.0, description="Hybrid 모드 RRF 가중치"
-    )
+    dense_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="Hybrid 모드 RRF 가중치")
     previous_mode: ModeName | None = Field(
         default=None,
         description="'다른 모드로 재시도' 시 직전 응답의 라우팅 모드. 라우터 진화 학습 시그널.",

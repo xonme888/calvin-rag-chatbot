@@ -40,9 +40,7 @@ def check_token_budget(stats: SessionStats) -> None:
         )
 
 
-def check_user_budget(
-    user_id: str | None, ip: str, role: str = "free"
-) -> None:
+def check_user_budget(user_id: str | None, ip: str, role: str = "free") -> None:
     """사용자/IP 별 일일 한도 체크. 초과 시 429.
 
     인증 전: user_id=None → ip 기반 키.

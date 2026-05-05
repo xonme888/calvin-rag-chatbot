@@ -116,9 +116,7 @@ def main() -> int:
         curated = json.loads(curated_path.read_text(encoding="utf-8"))
         curated_terms = {item["term"] for item in curated if isinstance(item, dict)}
         # KG 의 모든 label
-        kg_labels = adapter.query_cypher(
-            "MATCH (n:__Entity__) RETURN DISTINCT n.id AS id"
-        )
+        kg_labels = adapter.query_cypher("MATCH (n:__Entity__) RETURN DISTINCT n.id AS id")
         kg_label_set = {row.get("id") for row in kg_labels if row.get("id")}
         overlap = curated_terms & kg_label_set
         only_curated = curated_terms - kg_label_set

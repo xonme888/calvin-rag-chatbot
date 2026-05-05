@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
@@ -29,9 +29,7 @@ class CircuitOpenError(Exception):
     """회로가 열려있어 호출 차단됨."""
 
     def __init__(self, name: str, opened_for_seconds: float) -> None:
-        super().__init__(
-            f"circuit '{name}' open ({opened_for_seconds:.0f}s 동안 차단)"
-        )
+        super().__init__(f"circuit '{name}' open ({opened_for_seconds:.0f}s 동안 차단)")
         self.name = name
 
 

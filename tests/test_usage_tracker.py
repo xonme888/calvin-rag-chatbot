@@ -14,7 +14,6 @@ import pytest
 from infra.usage_tracker import (
     MODEL_PRICING_USD,
     USD_TO_KRW,
-    ModeStats,
     SessionStats,
     UsageTracker,
     estimate_cost_krw,

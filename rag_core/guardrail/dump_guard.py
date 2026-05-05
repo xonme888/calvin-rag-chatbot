@@ -12,7 +12,9 @@ from rag_core.guardrail.port import GuardrailDecision, GuardrailDirection
 
 # "전문/전체/모든 본문" 류 — 책 dump 시도
 _DUMP_REQUEST_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(전문|전체|모든)\s*(본문|텍스트|내용|chapter|장)\s*(보여|출력|알려|줘|주세요|달라)"),
+    re.compile(
+        r"(전문|전체|모든)\s*(본문|텍스트|내용|chapter|장)\s*(보여|출력|알려|줘|주세요|달라)"
+    ),
     re.compile(r"(\d+권|\d+장)\s*(전체|전문|모두|다)\s*(보여|출력|알려|줘)"),
     re.compile(r"(책\s*)?처음부터\s*끝까지"),
     re.compile(r"전체\s*(목차|텍스트|구절)\s*(나열|열거|출력)"),
