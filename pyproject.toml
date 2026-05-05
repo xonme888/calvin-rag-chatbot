@@ -37,6 +37,9 @@ dependencies = [
 
     # 토큰 카운팅 (선택이나 임베딩 비용 추정용)
     "tiktoken>=0.8.0",
+
+    # 인덱스 storage 분리 (Private HF Dataset 에서 부팅 시 fetch — 저작권 자산 가림)
+    "huggingface-hub>=0.24",
 ]
 
 [project.optional-dependencies]

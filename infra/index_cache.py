@@ -100,6 +100,39 @@ def build_or_load_faiss(
     return vector_store
 
 
+def load_chunks_from_cache(
+    cache_key: str,
+    embeddings: Embeddings,
+) -> tuple[list[Document], FAISS]:
+    """캐시된 FAISS 인덱스를 로드해 chunks + vector_store 를 복원한다.
+
+    PDF 없이 부팅 가능하게 만드는 핵심. FAISS docstore 가 청크 메타까지 보존하므로
+    원본 문서를 다시 읽지 않고도 retriever 재구성에 필요한 정보가 모두 들어 있다.
+
+    Args:
+        cache_key: 캐시 식별자
+        embeddings: vector_store 에 바인딩될 임베딩 모델
+
+    Returns:
+        (chunks, vector_store) 튜플. caller 가 BM25/Hybrid retriever 재구성에 사용.
+
+    Raises:
+        FileNotFoundError: 캐시가 존재하지 않을 때
+    """
+    if not has_cache(cache_key):
+        raise FileNotFoundError(f"캐시 없음: {cache_path(cache_key)}")
+
+    target = cache_path(cache_key)
+    vector_store = FAISS.load_local(
+        str(target),
+        embeddings,
+        allow_dangerous_deserialization=True,
+    )
+    # FAISS InMemoryDocstore — _dict 는 Document 객체 그대로 보존
+    chunks = list(vector_store.docstore._dict.values())
+    return chunks, vector_store
+
+
 def clear_cache(cache_key: str) -> bool:
     """특정 캐시를 삭제한다.
 

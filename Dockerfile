@@ -1,10 +1,18 @@
-# Calvin RAG Chatbot API — Fly.io / Cloud Run 호환 Dockerfile
+# Calvin RAG Chatbot API — Hugging Face Spaces / Fly.io / Cloud Run 호환 Dockerfile
 #
 # 빌드: docker build -t calvin-api .
-# 로컬 실행: docker run -p 8000:8000 --env-file .env calvin-api
+# 로컬 실행: docker run -p 7860:7860 --env-file .env calvin-api
 #
-# 인덱스 캐시 (~50MB FAISS) 는 이미지에 포함하지 않고 첫 부팅 시 PDF 에서 빌드.
-# 또는 빌드 시점에 PDF 를 image 에 ADD 한 뒤 entrypoint 가 인덱싱 후 시작 (권장).
+# 인덱스 storage 분리:
+#   - 책 본문 청크가 들어 있는 indexes/ 는 image 에 포함하지 않는다 (저작권 보호).
+#   - 부팅 시 scripts/boot.sh 가 HF_INDEX_REPO (Private Dataset) 에서 fetch.
+#   - 로컬 개발은 indexes/ 가 그대로 있어 fetch 없이 동작.
+#   - rag_core/calvin_builder.py 가 has_cache(...) hit 시 PDF 로드를 스킵하므로
+#     인덱스만 있으면 PDF 없이 부팅 가능.
+#
+# 포트:
+#   - HF Spaces: 7860 (기본). app_port = 7860 (README.md frontmatter 에 명시)
+#   - Fly.io: PORT 환경변수로 동적 주입 가능 — fallback 7860
 
 FROM python:3.11-slim AS base
 
@@ -36,17 +44,18 @@ COPY infra ./infra
 COPY scripts ./scripts
 COPY data/glossary ./data/glossary
 
-# 칼빈 PDF — 저작권으로 git 무추적. 배포 시 별도 mount 또는 빌드 시 ADD.
-# 운영: fly.toml volume 또는 Cloud Run Cloud Storage mount.
-# 환경변수 CALVIN_PDF_PATH 로 위치 지정.
-RUN mkdir -p /app/data/calvin /app/indexes /root/.calvin-rag-chatbot
+# 인덱스/PDF 모두 image 에 포함하지 않는다.
+# 인덱스: 부팅 시 scripts/boot.sh 가 HF Dataset 에서 fetch.
+# PDF: 저작권상 image 미포함 (개발용 .env 에서 절대경로로만 주입).
+RUN mkdir -p /app/indexes /app/data/calvin /root/.calvin-rag-chatbot
 
 # ---- 헬스체크 ----
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health/live || exit 1
+    CMD curl -f http://localhost:${PORT:-7860}/health/live || exit 1
 
-EXPOSE 8000
+# HF Spaces 기본 포트 7860. Fly.io 는 PORT 를 동적으로 주입한다.
+EXPOSE 7860
 
 # ---- 엔트리포인트 ----
-# Fly.io 는 PORT 를 동적으로 주입할 수 있음 — fallback 8000
-CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# scripts/boot.sh: 인덱스 fetch (선택) → uvicorn exec
+CMD ["/bin/sh", "/app/scripts/boot.sh"]

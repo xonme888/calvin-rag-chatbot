@@ -1,0 +1,48 @@
+# Fly.io fallback 배포 워크플로
+#
+# 사용 시점:
+#   - HF Spaces latency / 동시성에 한계가 명확해질 때 (한국 사용자 빠른 응답 필요)
+#   - HF Space 가 일시적으로 다운됐을 때 즉시 우회
+#
+# 트리거:
+#   - workflow_dispatch (Actions 탭에서 수동 실행)
+#   - deploy-fly 브랜치 push (실험용)
+#
+# 사전 준비:
+#   1. fly auth login → fly launch (이미 fly.toml 존재)
+#   2. fly secrets set OPENAI_API_KEY=... INVITE_CODES=... CORS_ORIGINS=...
+#   3. fly volumes create calvin_data --region nrt --size 1   (PDF 없이 가능 — 인덱스만 보존하려면 1GB 충분)
+#   4. fly tokens create deploy → GitHub Secrets 의 FLY_API_TOKEN 으로 등록
+name: deploy-api-fly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [deploy-fly]
+
+concurrency:
+  group: deploy-api-fly
+  cancel-in-progress: false
+
+jobs:
+  fly-deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN secret 미설정. fly tokens create deploy 로 발급."
+            exit 1
+          fi
+          flyctl deploy --remote-only
+
+      - name: Summary
+        run: |
+          echo "Deployed to: https://$(grep '^app' fly.toml | sed 's/app *= *\"\(.*\)\".*/\1/').fly.dev" >> "$GITHUB_STEP_SUMMARY"

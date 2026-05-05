@@ -110,18 +110,30 @@ class SlackAlerter:
             message = redact(message)
         except Exception:  # noqa: BLE001
             pass
-        emoji = {"info": ":information_source:", "warn": ":warning:", "error": ":x:", "critical": ":rotating_light:"}
+        emoji = {
+            "info": ":information_source:",
+            "warn": ":warning:",
+            "error": ":x:",
+            "critical": ":rotating_light:",
+        }
         body = {
             "text": f"{emoji.get(level.value, '')} *[{level.value.upper()}]* {message}",
             "attachments": [
                 {
-                    "color": {"info": "#36a64f", "warn": "#ffae42", "error": "#e01e5a", "critical": "#9b0000"}.get(level.value, "#888"),
+                    "color": {
+                        "info": "#36a64f",
+                        "warn": "#ffae42",
+                        "error": "#e01e5a",
+                        "critical": "#9b0000",
+                    }.get(level.value, "#888"),
                     "fields": [
                         {"title": k, "value": str(v)[:200], "short": True}
                         for k, v in (context or {}).items()
                     ],
                 }
-            ] if context else [],
+            ]
+            if context
+            else [],
         }
         try:
             req = urllib.request.Request(

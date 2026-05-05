@@ -1,6 +1,16 @@
+---
+title: Calvin RAG API
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Multi-mode RAG over Calvin's Institutes (Korean translation)
+---
+
 # Calvin RAG Chatbot
 
 존 칼빈의 『기독교 강요』(Institutes of the Christian Religion, 1559) 한국어 번역본 1,251 페이지를 대상으로 한 다중 모드 RAG 챗봇.
+
+> **HF Space frontmatter 안내**: 위 YAML 블록은 Hugging Face Spaces 가 빌드 메타데이터로 사용한다. GitHub 에서는 일반 README 로, HF 에서는 Docker Space 설정으로 이중 작동한다.
 
 ## 모드 (v1)
 

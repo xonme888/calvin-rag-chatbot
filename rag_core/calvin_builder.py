@@ -7,7 +7,12 @@ PDF 로드 + 청크 분할 + FAISS 인덱스 캐싱 + BM25 인덱스를 한 번�
 from __future__ import annotations
 
 from infra.document_loader import load_calvin
-from infra.index_cache import build_or_load_faiss, make_cache_key
+from infra.index_cache import (
+    build_or_load_faiss,
+    has_cache,
+    load_chunks_from_cache,
+    make_cache_key,
+)
 from rag_core.hybrid import HybridRAG, HybridRAGConfig
 
 # 칼빈 강요 전용 시스템 프롬프트
@@ -61,15 +66,21 @@ def build_calvin_rag(
     )
     rag = HybridRAG(config=config)
 
-    docs = load_calvin()
-    chunks = rag.retriever.text_splitter.split_documents(docs)
-
     cache_key = make_cache_key(
         "calvin",
         f"chunk{config.chunk_size}",
         f"overlap{config.chunk_overlap}",
     )
-    vector_store = build_or_load_faiss(cache_key, chunks, rag.embeddings)
+
+    # 캐시 hit 시 PDF 없이 부팅 가능 — 배포 환경에서는 PDF 를 이미지에 포함하지 않는다.
+    # 첫 빌드(로컬 개발) 에만 PDF 가 필요하다.
+    if has_cache(cache_key):
+        chunks, vector_store = load_chunks_from_cache(cache_key, rag.embeddings)
+    else:
+        docs = load_calvin()
+        chunks = rag.retriever.text_splitter.split_documents(docs)
+        vector_store = build_or_load_faiss(cache_key, chunks, rag.embeddings)
+
     rag.retriever.load_prebuilt_index(chunks=chunks, vector_store=vector_store)
 
     return rag

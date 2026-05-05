@@ -14,15 +14,16 @@ venv/
 .env.bak
 .env.local
 
-# Index cache (재생성 가능 — 첫 부팅 시 빌드)
-indexes/
-*.faiss
-*.pkl
-
 # 데이터 — 칼빈 PDF (저작권). 글로서리 JSON 만 별도 COPY.
 data/calvin/
 *.pdf
 *.epub
+
+# 인덱스 — 본문 청크가 들어 있어 저작권 자산. image 에 포함 금지.
+# 운영: 부팅 시 Private HF Dataset 에서 fetch (scripts/boot.sh)
+indexes/
+*.faiss
+*.pkl
 
 # Docs / Tests / Web (분리 배포)
 docs/

@@ -1,0 +1,87 @@
+# main push 시 Hugging Face Space (Docker) 로 자동 배포
+#
+# 책임:
+#   - api 관련 경로 변경 시 HF Space repo 로 mirror push
+#   - HF 빌드 트리거 (Space 가 자동으로 docker build 실행, 5~10 분 소요)
+#
+# 사전 준비:
+#   1. https://huggingface.co/new-space → Docker SDK, app_port=7860
+#   2. GitHub Secrets:
+#        HF_TOKEN  — https://huggingface.co/settings/tokens (write 권한)
+#        HF_USER   — HF 사용자명
+#        HF_SPACE  — Space 이름 (예: calvin-rag-api)
+#   3. HF Space Settings → Variables/Secrets:
+#        OPENAI_API_KEY (secret)
+#        INVITE_CODES, CORS_ORIGINS, VISION_ENABLED, BUDGET_FREE_CAP, DAILY_TOKEN_CAP, LOG_SINK (variable)
+#        NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD (secret, KG 사용 시)
+#
+# 배포 흐름:
+#   1. main 브랜치 push
+#   2. 이 워크플로가 API 관련 디렉토리만 추려 force push
+#   3. HF Space 가 commit 감지 → Docker 빌드 → 새 컨테이너 기동
+#   4. 동일 도메인(<HF_USER>-<HF_SPACE>.hf.space) 유지 — 다운타임 ~30초
+name: deploy-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "rag_core/**"
+      - "infra/**"
+      - "scripts/**"
+      - "data/glossary/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "README.md"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  push-to-hf-space:
+    name: Mirror push → HF Space
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # 인덱스 파일은 git lfs 가 아니라 일반 파일로 추적되므로 lfs: false 유지
+          lfs: false
+
+      - name: Configure git identity
+        run: |
+          git config user.email "ci@github.actions"
+          git config user.name "github-actions[bot]"
+
+      - name: Strip non-API paths (web, tests, docs, etc.)
+        run: |
+          # HF Space 빌드에 불필요한 경로를 제거해 image 크기 / 빌드 시간 절감
+          rm -rf web tests docs compare experiments .vscode .idea
+          # 변경 사항을 임시 commit (force push 대상)
+          git add -A
+          git commit -m "ci: strip non-api paths for HF Space" || true
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USER: ${{ secrets.HF_USER }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_USER" ] || [ -z "$HF_SPACE" ]; then
+            echo "::error::HF_TOKEN / HF_USER / HF_SPACE secrets 가 설정되지 않았습니다."
+            exit 1
+          fi
+          git push --force \
+            "https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}" \
+            HEAD:main
+
+      - name: Summary
+        run: |
+          echo "Deployed to: https://${{ secrets.HF_USER }}-${{ secrets.HF_SPACE }}.hf.space" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "HF Space build status: https://huggingface.co/spaces/${{ secrets.HF_USER }}/${{ secrets.HF_SPACE }}" >> "$GITHUB_STEP_SUMMARY"
