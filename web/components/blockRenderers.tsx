@@ -151,6 +151,16 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
     </div>
   ),
 
+  skeleton_text: () => (
+    <div className="my-2 space-y-2" aria-hidden>
+      <div className="h-3 w-11/12 rounded bg-slate-100 animate-pulse" />
+      <div className="h-3 w-full rounded bg-slate-100 animate-pulse" />
+      <div className="h-3 w-10/12 rounded bg-slate-100 animate-pulse" />
+      <div className="h-3 w-3/4 rounded bg-slate-100 animate-pulse" />
+      <span className="inline-block w-2 h-3 align-middle bg-slate-300 animate-pulse" />
+    </div>
+  ),
+
   skeleton_followups: () => (
     <div
       className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1.5"

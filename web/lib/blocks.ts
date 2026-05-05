@@ -54,6 +54,7 @@ export type Block =
   // streaming 시점 placeholder — 메타 도착 전 영역 구조 유지
   | { type: "skeleton_header" }
   | { type: "skeleton_citations" }
+  | { type: "skeleton_text" }
   | { type: "skeleton_followups" };
 
 // ====================================================================
@@ -196,8 +197,12 @@ export function messageToBlocks(
     out.push({ type: "tool_trace", calls });
   }
 
-  // 본문 (markdown)
-  out.push({ type: "text", content: msg.content, streaming: msg.streaming });
+  // 본문 — 첫 토큰 도착 전엔 skeleton, 이후 markdown 스트리밍
+  if (msg.streaming && !msg.content) {
+    out.push({ type: "skeleton_text" });
+  } else {
+    out.push({ type: "text", content: msg.content, streaming: msg.streaming });
+  }
 
   // 후속 질문 — 마지막 답변에만. 진행 중엔 skeleton 으로 자리 잡음
   const followups = extractFollowups(msg);
