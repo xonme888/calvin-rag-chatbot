@@ -20,19 +20,21 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 
 def _resolve_calvin_pdf_path() -> Path:
-    """칼빈 PDF 경로를 결정한다.
+    """칼빈 PDF 경로를 결정한다 — 매 호출 환경변수 재읽기.
 
     우선순위:
         1. 환경변수 ``CALVIN_PDF_PATH``
         2. 이 repo의 ``data/calvin/calvin_institutes.pdf`` (fallback)
+
+    .env 파싱 잔존 문자 (따옴표·공백·CR) 제거 + ~ 확장.
     """
-    env_path = os.getenv("CALVIN_PDF_PATH", "").strip()
+    env_path = os.getenv("CALVIN_PDF_PATH", "").strip(" \t\r\n\"'")
     if env_path:
-        return Path(env_path).expanduser()
+        return Path(env_path).expanduser().resolve()
     return DATA_DIR / "calvin" / "calvin_institutes.pdf"
 
 
-# 모듈 레벨 상수: import 시점에 한 번 결정
+# 하위 호환 — 일부 모듈이 import 시점 값으로 참조 가능. load_calvin 은 매번 재해석.
 CALVIN_PDF_PATH = _resolve_calvin_pdf_path()
 
 
@@ -102,17 +104,27 @@ def load_calvin() -> list[Document]:
     """기독교 강요 PDF를 로드한다.
 
     경로는 ``CALVIN_PDF_PATH`` 환경변수 우선, 미설정 시 이 repo의 ``data/`` fallback.
-    저작권 보호를 위해 PDF 폴더는 .gitignore 에 등록되어 있음.
+    매 호출 환경변수 재읽기 — .env 변경 즉시 반영.
 
     Returns:
         페이지 단위 Document 리스트 (길이 ≈ 1,251)
 
     Raises:
-        FileNotFoundError: PDF 파일이 없을 때
+        FileNotFoundError: PDF 파일이 없을 때 — 부모 디렉토리 listing 포함
     """
-    if not CALVIN_PDF_PATH.exists():
+    path = _resolve_calvin_pdf_path()
+    if not path.exists():
+        # 진단 — 부모 디렉토리에 어떤 파일이 있는지 노출
+        parent = path.parent
+        listing = "(부모 디렉토리도 없음)"
+        if parent.exists():
+            entries = sorted(p.name for p in parent.iterdir())[:20]
+            listing = "\n  - " + "\n  - ".join(entries) if entries else "(비어있음)"
         raise FileNotFoundError(
-            f"칼빈 강요 PDF가 없습니다: {CALVIN_PDF_PATH}\n"
-            f".env의 CALVIN_PDF_PATH를 확인하거나 위 경로에 PDF를 두세요."
+            f"칼빈 강요 PDF가 없습니다.\n"
+            f"  resolved={path}\n"
+            f"  raw env={os.getenv('CALVIN_PDF_PATH', '<unset>')!r}\n"
+            f"  parent={parent} 내용:{listing}\n"
+            f".env의 CALVIN_PDF_PATH 값에 따옴표/공백이 있거나 경로가 다른지 확인하세요."
         )
-    return load_pdf(CALVIN_PDF_PATH)
+    return load_pdf(path)

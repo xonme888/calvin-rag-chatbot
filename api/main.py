@@ -35,8 +35,10 @@ try:
 
     _invite_raw = _os.getenv("INVITE_CODES", "").strip()
     _invite_count = len([c for c in _invite_raw.split(",") if c.strip()])
+    _calvin_path_raw = _os.getenv("CALVIN_PDF_PATH", "<unset>")
     print(
-        f"[boot] .env loaded={_loaded} from={_env_path} INVITE_CODES count={_invite_count}",
+        f"[boot] .env loaded={_loaded} from={_env_path} "
+        f"INVITE_CODES count={_invite_count} CALVIN_PDF_PATH={_calvin_path_raw!r}",
         flush=True,
     )
 except ImportError:
