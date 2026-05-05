@@ -1,10 +1,11 @@
 "use client";
 
 import { ChatPanel } from "@/components/ChatPanel";
+import { InviteGate } from "@/components/InviteGate";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { useSessions } from "@/lib/sessionStore";
 
-export default function HomePage() {
+function ChatHome() {
   const session = useSessions();
 
   if (!session.ready || !session.active) {
@@ -35,5 +36,13 @@ export default function HomePage() {
         markPending={session.markPending}
       />
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <InviteGate>
+      <ChatHome />
+    </InviteGate>
   );
 }

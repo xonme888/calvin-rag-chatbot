@@ -28,6 +28,7 @@ from api.middleware.rate_limiter import limiter
 from api.middleware.token_budget import check_token_budget, check_user_budget
 from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from infra.budget import budget_key, record_usage
+from infra.invite_codes import is_enforcement_enabled, mask_code, verify_code
 from infra.circuit_breaker import CircuitOpenError, get_breaker
 from infra.observability import (
     LangChainTracer,
@@ -52,6 +53,23 @@ def _client_ip(request: Request) -> str:
     if request.client is not None:
         return request.client.host
     return "unknown"
+
+
+def _check_invite(request: Request) -> str | None:
+    """초대 코드 검증 — 활성 시 X-Invite-Code 헤더 검증, 실패 시 401 raise.
+
+    Returns:
+        검증 통과한 코드 (audit_log 기록용). 비활성 시 None.
+    """
+    if not is_enforcement_enabled():
+        return None
+    code = request.headers.get("x-invite-code", "").strip()
+    if not verify_code(code):
+        raise HTTPException(
+            status_code=401,
+            detail="유효하지 않은 초대 코드입니다. 메인 화면에서 다시 입력해 주세요.",
+        )
+    return code
 
 
 def _resolve_mode(req: ChatRequest) -> tuple[ChatRequest, bool]:
@@ -169,6 +187,7 @@ async def chat_sync(
     """
     ip = _client_ip(request)
     stats = get_session_stats()
+    invite_code = _check_invite(request)
     # 한 request 단위 trace_id — observability.LangChainTracer 와 audit_log 가 공유
     trace_id = new_trace_id()
     set_current_trace_id(trace_id)
@@ -179,6 +198,7 @@ async def chat_sync(
         question_preview=req.question[:120],
         client_mode=req.mode,
         attachment_count=len(req.attachments),
+        invite_code=mask_code(invite_code),
     )
 
     # 0. Token budget cap — 전역 + 사용자/IP 단위 (PRD-4)
@@ -265,6 +285,7 @@ async def chat_sync(
             auto_routed=was_auto,
             previous_mode=req.previous_mode,
             user_overrode=user_overrode,
+            invite_code=mask_code(invite_code),
         ),
     )
     trace_event(
@@ -466,6 +487,7 @@ async def chat_stream(
     """
     ip = _client_ip(request)
     stats = get_session_stats()
+    invite_code = _check_invite(request)
     check_token_budget(stats)
 
     # 한 stream 단위 trace_id
@@ -478,6 +500,7 @@ async def chat_stream(
         question_preview=req.question[:120],
         client_mode=req.mode,
         attachment_count=len(req.attachments),
+        invite_code=mask_code(invite_code),
     )
 
     # mode='auto' 라우팅 — 사용자에게 모드 노출 X

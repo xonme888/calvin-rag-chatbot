@@ -1,6 +1,8 @@
 // FastAPI 클라이언트 — 자체 fetch + ReadableStream 으로 SSE 파싱.
 // Vercel AI SDK useChat 의 stream protocol 호환성 회피 (단순/통제 가능).
 
+import { inviteHeaders } from "./invite";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
@@ -94,7 +96,7 @@ export async function generateAutoTitle(
   try {
     const r = await fetch(`${API_BASE}/title`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...inviteHeaders() },
       body: JSON.stringify({ question, answer: answer.slice(0, 8000) }),
     });
     if (!r.ok) return "";
@@ -118,7 +120,7 @@ export async function chatSync(
 ): Promise<ChatSyncResponse> {
   const r = await fetch(`${API_BASE}/chat/sync`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...inviteHeaders() },
     body: JSON.stringify(req),
     signal,
   });
@@ -155,6 +157,7 @@ export async function* chatStream(
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
+      ...inviteHeaders(),
     },
     body: JSON.stringify(req),
     cache: "no-store",
