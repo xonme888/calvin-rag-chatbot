@@ -4,67 +4,107 @@ import { Fragment, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import type { CitationLabel } from "@/lib/api";
+import type { CitationLabel, MatchedTerm } from "@/lib/api";
 import { InlineCitation } from "./InlineCitation";
+import { TermTooltip } from "./TermTooltip";
 
 interface Props {
   content: string;
   sources: string[];
   labels: Array<CitationLabel | null>;
   onCitationClick?: (page: number) => void;
+  /** 답변 안 글로서리 매칭 — inline tooltip 용. 없으면 인용만 처리. */
+  matchedTerms?: MatchedTerm[];
 }
 
 const CITATION_PATTERN = /\[p\.(\d+)\]/g;
 
+function escapeRegex(s: string): string {
+  return s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+}
+
 /**
- * 답변 본문 markdown 렌더 + [p.N] 인라인 인용을 InlineCitation 으로 치환.
+ * 답변 본문 markdown 렌더 + [p.N] 인라인 인용 + 글로서리 용어 tooltip 치환.
  *
  * 동작:
- * - react-markdown + remark-gfm 으로 마크다운 (굵게/리스트/링크) 렌더
- * - text node 를 walk 하면서 /\[p\.(\d+)\]/g 매칭 위치를 InlineCitation 으로 분할
- * - source_pages_label 의 page 와 매칭해 carousel index (1-indexed) 부여
+ * - react-markdown + remark-gfm 으로 마크다운 렌더
+ * - text node 를 walk 하면서 인용 + 글로서리 alias 모두 한 정규식으로 매칭
+ *   (긴 alias 우선 → 짧은 substring 누락 방지)
+ * - 인용은 InlineCitation, 용어는 TermTooltip 으로 치환
  */
 export function MarkdownAnswer({
   content,
   sources,
   labels,
   onCitationClick,
+  matchedTerms,
 }: Props) {
   // page → carousel index (1-indexed) 맵 (labels 우선, 없으면 sources 순서)
   const pageToIndex = new Map<number, number>();
   labels.forEach((label, i) => {
-    if (label?.page != null) {
-      // 첫 등장만 기록 (같은 페이지 청크 여러 개일 때)
-      if (!pageToIndex.has(label.page)) {
-        pageToIndex.set(label.page, i + 1);
-      }
+    if (label?.page != null && !pageToIndex.has(label.page)) {
+      pageToIndex.set(label.page, i + 1);
     }
   });
+
+  // alias → MatchedTerm 룩업 + 동적 정규식 (긴 단어 우선)
+  const aliasMap = new Map<string, MatchedTerm>();
+  for (const t of matchedTerms ?? []) {
+    aliasMap.set(t.term, t);
+    for (const a of t.aliases) aliasMap.set(a, t);
+  }
+  const aliasList = Array.from(aliasMap.keys()).sort(
+    (a, b) => b.length - a.length,
+  );
+  const combinedPattern = aliasList.length
+    ? new RegExp(
+        `\\[p\\.(\\d+)\\]|(${aliasList.map(escapeRegex).join("|")})`,
+        "g",
+      )
+    : CITATION_PATTERN;
 
   function renderText(text: string): ReactNode[] {
     const out: ReactNode[] = [];
     let lastIdx = 0;
     let match: RegExpExecArray | null;
-    CITATION_PATTERN.lastIndex = 0;
-    while ((match = CITATION_PATTERN.exec(text)) !== null) {
+    combinedPattern.lastIndex = 0;
+    while ((match = combinedPattern.exec(text)) !== null) {
       if (match.index > lastIdx) {
         out.push(text.slice(lastIdx, match.index));
       }
-      const page = Number(match[1]);
-      const carouselIndex = pageToIndex.get(page) ?? page;
-      const label = labels.find((l) => l?.page === page) ?? null;
-      const preview =
-        sources[carouselIndex - 1]?.replace(/\n/g, " ").slice(0, 200) ?? "";
-      out.push(
-        <InlineCitation
-          key={`cite-${match.index}`}
-          page={page}
-          carouselIndex={carouselIndex}
-          label={label}
-          preview={preview}
-          onActivate={onCitationClick}
-        />,
-      );
+      // 인용 매칭 (group 1) 우선
+      if (match[1] !== undefined) {
+        const page = Number(match[1]);
+        const carouselIndex = pageToIndex.get(page) ?? page;
+        const label = labels.find((l) => l?.page === page) ?? null;
+        const preview =
+          sources[carouselIndex - 1]?.replace(/\n/g, " ").slice(0, 200) ?? "";
+        out.push(
+          <InlineCitation
+            key={`cite-${match.index}`}
+            page={page}
+            carouselIndex={carouselIndex}
+            label={label}
+            preview={preview}
+            onActivate={onCitationClick}
+          />,
+        );
+      } else if (match[2] !== undefined) {
+        // 글로서리 alias 매칭
+        const alias = match[2];
+        const term = aliasMap.get(alias);
+        if (term) {
+          out.push(
+            <TermTooltip
+              key={`term-${match.index}`}
+              term={term}
+              display={alias}
+            />,
+          );
+        } else {
+          out.push(alias);
+        }
+      }
       lastIdx = match.index + match[0].length;
     }
     if (lastIdx < text.length) {
@@ -73,7 +113,6 @@ export function MarkdownAnswer({
     return out;
   }
 
-  // children(ReactNode) 안의 string을 walk 하며 인용 치환
   function transformChildren(children: ReactNode): ReactNode {
     if (typeof children === "string") {
       const parts = renderText(children);

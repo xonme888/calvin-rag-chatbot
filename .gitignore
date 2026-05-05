@@ -17,10 +17,13 @@ indexes/
 *.faiss
 *.pkl
 
-# 데이터 (저작권 보호 — 절대 커밋 금지)
-data/
-*.pdf
-*.epub
+# 데이터 — 저작권 보호 자료만 무시. 정의/메타데이터는 추적
+# (data/ 전체를 막으면 자식 negation 이 안 먹어 좁은 패턴 사용)
+data/calvin/
+data/*.pdf
+data/**/*.pdf
+data/*.epub
+data/**/*.epub
 
 # IDE
 .vscode/

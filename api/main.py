@@ -62,7 +62,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.middleware.rate_limiter import limiter
-from api.routes import chat, health, invite, stats, title
+from api.routes import chat, glossary, health, invite, stats, title
 
 app = FastAPI(
     title="Calvin RAG Chatbot API",
@@ -98,3 +98,4 @@ app.include_router(stats.router)
 app.include_router(chat.router)
 app.include_router(title.router)
 app.include_router(invite.router)
+app.include_router(glossary.router)

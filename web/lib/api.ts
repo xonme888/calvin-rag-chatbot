@@ -69,6 +69,15 @@ export interface ChatStreamMeta {
   cache_total?: number;
   cache_hit_rate?: number;
   from_cache?: boolean; // 모든 LLM 호출이 캐시 hit 이면 true
+  // 글로서리 매칭 — 답변 안 inline tooltip 데이터
+  matched_terms?: MatchedTerm[];
+}
+
+export interface MatchedTerm {
+  term: string;
+  aliases: string[];
+  definition: string;
+  sources: Array<{ page: number; label: string }>;
 }
 
 export interface ChatSyncResponse {
@@ -83,6 +92,18 @@ export interface ModeInfo {
   label: string;
   available: boolean;
   reason: string | null;
+}
+
+/** 글로서리 — 첫 진입 시 한 번 fetch, 이후 캐시. */
+export async function fetchGlossary(): Promise<MatchedTerm[]> {
+  try {
+    const r = await fetch(`${API_BASE}/glossary`, { cache: "force-cache" });
+    if (!r.ok) return [];
+    const j = (await r.json()) as { terms?: MatchedTerm[] };
+    return j.terms ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -96,6 +96,7 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
         sources={ctx.sources}
         labels={ctx.labels}
         onCitationClick={ctx.onCitationClick}
+        matchedTerms={block.matchedTerms}
       />
       {block.streaming && (
         <span className="inline-block ml-1 animate-pulse text-slate-400">▍</span>

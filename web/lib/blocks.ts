@@ -10,7 +10,7 @@
  * - { type: "chart"; spec: VegaSpec }
  */
 
-import type { Attachment, CitationLabel, RagMode } from "./api";
+import type { Attachment, CitationLabel, MatchedTerm, RagMode } from "./api";
 import type { SessionMessage } from "./sessionStore";
 
 // SubgraphData 는 컴포넌트 쪽에서 정의 — 순환 import 방지로 inline 재선언
@@ -35,7 +35,7 @@ interface SubgraphPayload {
 // Block 타입 — 새 종류 추가 시 여기에 한 줄, RENDERERS 에 한 줄.
 // ====================================================================
 export type Block =
-  | { type: "text"; content: string; streaming?: boolean }
+  | { type: "text"; content: string; streaming?: boolean; matchedTerms?: MatchedTerm[] }
   | { type: "user_text"; content: string }
   | { type: "user_images"; attachments: Attachment[] }
   | { type: "header"; mode: string | null; routedMode: string | null; autoRouted: boolean }
@@ -109,6 +109,13 @@ function extractSubgraph(msg: SessionMessage): SubgraphPayload | null {
 interface ParsedToolCall {
   tool: string;
   args?: Record<string, unknown>;
+}
+
+function extractMatchedTerms(msg: SessionMessage): MatchedTerm[] {
+  const raw =
+    msg.streamMeta?.matched_terms ??
+    (msg.meta?.metadata.matched_terms as MatchedTerm[] | undefined);
+  return Array.isArray(raw) ? raw : [];
 }
 
 function extractToolCalls(msg: SessionMessage): ParsedToolCall[] {
@@ -197,11 +204,16 @@ export function messageToBlocks(
     out.push({ type: "tool_trace", calls });
   }
 
-  // 본문 — 첫 토큰 도착 전엔 skeleton, 이후 markdown 스트리밍
+  // 본문 — 첫 토큰 도착 전엔 skeleton, 이후 markdown 스트리밍 + 글로서리 tooltip
   if (msg.streaming && !msg.content) {
     out.push({ type: "skeleton_text" });
   } else {
-    out.push({ type: "text", content: msg.content, streaming: msg.streaming });
+    out.push({
+      type: "text",
+      content: msg.content,
+      streaming: msg.streaming,
+      matchedTerms: extractMatchedTerms(msg),
+    });
   }
 
   // 후속 질문 — 마지막 답변에만. 진행 중엔 skeleton 으로 자리 잡음

@@ -271,8 +271,17 @@ async def chat_sync(
     answer = result.get("final_answer", "")
     source_documents = result.get("source_documents", [])
     metadata = result.get("metadata", {})
+    # 글로서리 매칭 — 답변 안 핵심 용어 inline tooltip 데이터
+    from rag_core.glossary import find_terms_in
+
+    matched_terms = find_terms_in(answer)
     # 라우팅 결과를 항상 metadata 에 노출 — UI 가 "(자동: Hybrid)" 표시 가능
-    metadata = {**metadata, "routed_mode": req.mode, "auto_routed": was_auto}
+    metadata = {
+        **metadata,
+        "routed_mode": req.mode,
+        "auto_routed": was_auto,
+        "matched_terms": matched_terms,
+    }
 
     # 3. 출력 가드
     guard_action = "allow"
@@ -480,6 +489,16 @@ def _build_stream_meta_payload(
     """
     tracker_key = _mode_key(req.mode)
     mode_stats = stats.by_mode.get(tracker_key)
+    # 글로서리 매칭 — 답변 텍스트가 있을 때만 (Hybrid stream 은 answer_full,
+    # sync_replay 는 source_documents 와 분리된 final_answer 가 있어 별도 처리)
+    answer_text = (
+        result_metadata.get("answer_full", "") or " ".join(source_documents)[:0]
+    )
+    if not answer_text and result_metadata.get("final_answer"):
+        answer_text = result_metadata["final_answer"]
+    from rag_core.glossary import find_terms_in
+
+    matched_terms = find_terms_in(answer_text)
     return {
         "cited_pages": result_metadata.get("cited_pages", []),
         "source_documents": source_documents,
@@ -495,6 +514,7 @@ def _build_stream_meta_payload(
         "tool_calls": result_metadata.get("tool_calls", []),
         "tool_call_count": result_metadata.get("tool_call_count"),
         "suggested_followups": result_metadata.get("suggested_followups", []),
+        "matched_terms": matched_terms,
         "cache_hits": result_metadata.get("cache_hits", 0),
         "cache_misses": result_metadata.get("cache_misses", 0),
         "cache_total": result_metadata.get("cache_total", 0),
