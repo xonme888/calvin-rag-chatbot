@@ -65,8 +65,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Lint
-        run: npm run lint --if-present
+      # Lint 는 시연 후 ESLint flat config 로 마이그레이션 후 재활성:
+      #   cd web && npx @next/codemod@canary next-lint-to-eslint-cli .
+      # next lint 가 Next.js 16 에서 제거됨 + CI 에서 인터랙티브 prompt 로 hang.
 
       - name: Build
         env:
