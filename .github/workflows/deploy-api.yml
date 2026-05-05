@@ -67,31 +67,6 @@ jobs:
           git add -A
           git commit -m "ci: strip non-api paths for HF Space" || true
 
-      - name: Diagnostic — secret lengths + HF API checks
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USER: ${{ secrets.HF_USER }}
-          HF_SPACE: ${{ secrets.HF_SPACE }}
-        run: |
-          # 길이만 출력 (값은 마스킹 — 보안 OK)
-          echo "HF_USER length:  ${#HF_USER}   (expected: xonme888 = 8)"
-          echo "HF_SPACE length: ${#HF_SPACE}  (expected: calvin-rag-api = 14)"
-          echo "HF_TOKEN length: ${#HF_TOKEN}  (expected: ~37)"
-          # 토큰 자체의 유효성
-          whoami_code=$(curl -s -o /tmp/whoami.json -w "%{http_code}" \
-            -H "Authorization: Bearer $HF_TOKEN" \
-            https://huggingface.co/api/whoami-v2)
-          echo "whoami HTTP: $whoami_code"
-          if [ "$whoami_code" = "200" ]; then
-            echo "토큰의 실제 owner name (마스킹):"
-            grep -o '"name":"[^"]*"' /tmp/whoami.json | sed 's/[a-zA-Z0-9_-]/x/g' || true
-          fi
-          # Space 존재 + 접근 가능 여부
-          space_code=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer $HF_TOKEN" \
-            "https://huggingface.co/api/spaces/${HF_USER}/${HF_SPACE}")
-          echo "space api HTTP: $space_code (200=OK, 401=토큰무효, 404=Space없음/접근불가)"
-
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
