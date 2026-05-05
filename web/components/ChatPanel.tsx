@@ -320,9 +320,15 @@ export function ChatPanel({
                   : "bg-white border border-slate-200 mr-12",
               ].join(" ")}
             >
-              {blocks.map((b, bi) => (
-                <div key={bi}>{renderBlock(b, ctx)}</div>
-              ))}
+              {blocks.map((b, bi) => {
+                // skeleton 이 아닌 콘텐츠 block 은 등장 시 부드러운 fade-in
+                const isSkeleton = b.type.startsWith("skeleton_");
+                return (
+                  <div key={`${b.type}-${bi}`} className={isSkeleton ? "" : "block-fade-in"}>
+                    {renderBlock(b, ctx)}
+                  </div>
+                );
+              })}
             </div>
           );
         })}

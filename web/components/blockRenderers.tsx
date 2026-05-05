@@ -120,6 +120,51 @@ const RENDERERS: { [K in Block["type"]]: BlockRenderer<K> } = {
       }
     />
   ),
+
+  // ---- Skeletons ----
+  skeleton_header: () => (
+    <div className="mb-2 flex gap-2" aria-hidden>
+      <div className="h-3 w-16 rounded bg-slate-100 animate-pulse" />
+      <div className="h-3 w-24 rounded bg-slate-100 animate-pulse" />
+      <div className="h-3 w-20 rounded bg-slate-100 animate-pulse" />
+    </div>
+  ),
+
+  skeleton_citations: () => (
+    <div className="mt-2 mb-3" aria-hidden>
+      <div className="h-3 w-12 rounded bg-slate-100 animate-pulse mb-2" />
+      <div className="flex gap-2 overflow-hidden">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="shrink-0 w-64 h-[88px] rounded-md border border-slate-200 bg-slate-50/60"
+          >
+            <div className="p-3 flex flex-col gap-1.5">
+              <div className="h-2.5 w-2/3 rounded bg-slate-200/70 animate-pulse" />
+              <div className="h-2 w-full rounded bg-slate-100 animate-pulse" />
+              <div className="h-2 w-full rounded bg-slate-100 animate-pulse" />
+              <div className="h-2 w-3/4 rounded bg-slate-100 animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ),
+
+  skeleton_followups: () => (
+    <div
+      className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1.5"
+      aria-hidden
+    >
+      <div className="h-3 w-32 rounded bg-slate-100 animate-pulse mb-1" />
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="h-9 rounded-md border border-slate-100 bg-slate-50/60"
+        />
+      ))}
+    </div>
+  ),
 };
 
 export function renderBlock(block: Block, ctx: BlockContext): ReactNode {

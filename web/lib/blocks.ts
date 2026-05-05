@@ -50,7 +50,11 @@ export type Block =
       calls: Array<{ tool: string; args?: Record<string, unknown> }>;
     }
   | { type: "followups"; questions: string[] }
-  | { type: "retry_menu"; previousQuestion: string; currentMode: RagMode | null };
+  | { type: "retry_menu"; previousQuestion: string; currentMode: RagMode | null }
+  // streaming 시점 placeholder — 메타 도착 전 영역 구조 유지
+  | { type: "skeleton_header" }
+  | { type: "skeleton_citations" }
+  | { type: "skeleton_followups" };
 
 // ====================================================================
 // 메시지 → Block[] 어댑터.
@@ -158,21 +162,26 @@ export function messageToBlocks(
   }
 
   const out: Block[] = [];
+  const hasMeta = !!(msg.meta || msg.streamMeta);
 
-  // 헤더: meta 있을 때만
-  if (msg.meta || msg.streamMeta) {
+  // 헤더: meta 도착 시 실제, 진행 중이면 skeleton (영역 자리 유지)
+  if (hasMeta) {
     const { routedMode, autoRouted } = extractRoutedMode(msg);
     const mode =
       (msg.meta?.metadata.pattern as string | undefined) ??
       msg.streamMeta?.pattern ??
       null;
     out.push({ type: "header", mode, routedMode, autoRouted });
+  } else if (msg.streaming) {
+    out.push({ type: "skeleton_header" });
   }
 
-  // 출처 carousel
+  // 출처 carousel — 도착 전엔 skeleton 으로 자리 잡음
   const { sources, labels } = extractSources(msg);
   if (sources.length > 0) {
     out.push({ type: "citations", sources, labels });
+  } else if (msg.streaming) {
+    out.push({ type: "skeleton_citations" });
   }
 
   // KG subgraph
@@ -190,14 +199,12 @@ export function messageToBlocks(
   // 본문 (markdown)
   out.push({ type: "text", content: msg.content, streaming: msg.streaming });
 
-  // 후속 질문 — 마지막 답변에만, 진행 중 X
+  // 후속 질문 — 마지막 답변에만. 진행 중엔 skeleton 으로 자리 잡음
   const followups = extractFollowups(msg);
-  if (
-    opts.isLastAssistant &&
-    !msg.streaming &&
-    followups.length > 0
-  ) {
+  if (opts.isLastAssistant && !msg.streaming && followups.length > 0) {
     out.push({ type: "followups", questions: followups });
+  } else if (msg.streaming) {
+    out.push({ type: "skeleton_followups" });
   }
 
   // '다른 모드로 재시도' — 답변 완료 시점에 노출 (마지막 답변 외에도 가능)
