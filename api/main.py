@@ -36,9 +36,20 @@ try:
     _invite_raw = _os.getenv("INVITE_CODES", "").strip()
     _invite_count = len([c for c in _invite_raw.split(",") if c.strip()])
     _calvin_path_raw = _os.getenv("CALVIN_PDF_PATH", "<unset>")
+    # PDF 실제 존재 여부도 같이 진단 — uvicorn 콘솔만 봐도 즉시 식별
+    _calvin_exists: bool | str = "<unset>"
+    try:
+        from infra.document_loader import _resolve_calvin_pdf_path
+
+        _resolved = _resolve_calvin_pdf_path()
+        _calvin_exists = f"{_resolved} exists={_resolved.exists()}"
+    except Exception as _e:
+        _calvin_exists = f"resolve error: {_e}"
     print(
-        f"[boot] .env loaded={_loaded} from={_env_path} "
-        f"INVITE_CODES count={_invite_count} CALVIN_PDF_PATH={_calvin_path_raw!r}",
+        f"[boot] .env loaded={_loaded} from={_env_path}\n"
+        f"  INVITE_CODES count={_invite_count}\n"
+        f"  CALVIN_PDF_PATH raw={_calvin_path_raw!r}\n"
+        f"  resolved={_calvin_exists}",
         flush=True,
     )
 except ImportError:

@@ -64,26 +64,23 @@ export function ModeSelector({ modes, current, onChange }: Props) {
 
       {open && (
         <div className="flex gap-1.5 flex-wrap mt-1 pl-1">
-          {[AUTO_INFO, ...modes].map((m) => {
-            const disabled = !m.available;
-            const active = current === m.name && !disabled;
+          {/* 비활성 모드는 목록에서 아예 숨김 — 사용자에게 인프라 디테일 노출 X */}
+          {[AUTO_INFO, ...modes.filter((m) => m.available)].map((m) => {
+            const active = current === m.name;
             return (
               <button
                 key={m.name}
                 type="button"
-                disabled={disabled}
                 onClick={() => onChange(m.name)}
-                title={disabled ? m.reason ?? "비활성화" : m.label}
+                title={m.label}
                 className={[
-                  "px-2 py-1 rounded text-[12px] border transition-colors",
+                  "px-2 py-1 rounded text-[12px] border transition-colors cursor-pointer",
                   active
                     ? "bg-primary text-white border-primary"
                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50",
-                  disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
                 ].join(" ")}
               >
                 {m.label}
-                {disabled ? " (비활성)" : ""}
               </button>
             );
           })}
