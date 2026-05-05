@@ -45,8 +45,16 @@ class VisionRAG:
         if llm is None:
             from langchain_openai import ChatOpenAI
 
-            # vision 지원 모델 — gpt-4o (mini 도 vision 지원, 더 저렴)
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+            # 다른 RAG 와 동일 패턴 — Config (.env) 의 SecretStr 명시 전달.
+            # 환경변수 자동 읽기에 의존하지 않음 (main.py 가 dotenv 안 부르는 환경에서도 동작).
+            from rag_core.hybrid import get_config
+
+            cfg = get_config()
+            llm = ChatOpenAI(
+                api_key=cfg.open_api_key,
+                model="gpt-4o-mini",  # vision 지원 + 가장 저렴
+                temperature=0,
+            )
         self.llm: BaseChatModel = llm
 
     def query(
