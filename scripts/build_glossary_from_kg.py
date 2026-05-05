@@ -41,6 +41,38 @@ except ImportError:
 _DEFAULT_OUT = _PROJECT_ROOT / "data" / "glossary" / "calvin.json"
 
 
+# 너무 일반적인 신학 어휘 — glossary 부적합 (사용자 답변에 거의 매번 등장하면
+# tooltip 이 노이즈가 됨). KG 가 추출해도 export 단계에서 제외.
+_GENERIC_BLACKLIST: frozenset[str] = frozenset(
+    {
+        "하나님", "그리스도", "예수", "예수님", "예수 그리스도",
+        "성경", "하나님의 말씀", "말씀",
+        "신앙", "믿음", "신앙심",
+        "기독교", "기독교인", "교인",
+        "구원", "구원자",
+        "아버지", "주", "주님", "주의",
+        "사람", "사람들", "인간", "우리",
+        "God", "Lord", "Christ", "Jesus", "Father", "Son", "Holy Spirit",
+        "Bible", "Scripture", "Word",
+    }
+)
+# Glossary 항목 길이 한도 — 8자 넘는 term 은 phrase 일 가능성 높음
+_MAX_TERM_LEN = 8
+
+
+def _is_glossary_noise(term: str) -> bool:
+    """KG 노드 → glossary 변환 시 제외할지."""
+    if term in _GENERIC_BLACKLIST:
+        return True
+    # 8자 초과 term 은 phrase 일 가능성 높음 (예: "주께서 그것을 만드신 목적")
+    if len(term) > _MAX_TERM_LEN:
+        return True
+    # 띄어쓰기 포함은 phrase 가능성
+    if " " in term and not term.replace(" ", "").isalpha():
+        return True
+    return False
+
+
 def _build_alias_lookup() -> dict[str, list[str]]:
     """ENTITY_ALIASES 의 정규명 → [원본명1, 원본명2, ...] 매핑.
 
@@ -55,13 +87,17 @@ def _build_alias_lookup() -> dict[str, list[str]]:
 
 
 def _fetch_kg_terms(adapter: Any) -> list[dict[str, Any]]:
-    """KG 의 모든 entity 노드 + description + 출처 페이지."""
+    """KG 의 모든 entity 노드 + description + 출처 페이지.
+
+    LangChain ``add_graph_documents(include_source=True)`` 의 default 관계는
+    ``(:Document)-[:MENTIONS]->(:__Entity__)`` (Document → Entity 방향).
+    """
     rows = adapter.query_cypher(
         """
         MATCH (n:__Entity__)
         WHERE n.description IS NOT NULL AND n.description <> ''
         WITH n, [l IN labels(n) WHERE l <> '__Entity__' | l] AS lbls
-        OPTIONAL MATCH (n)-[:MENTIONED_IN]->(d:Document)
+        OPTIONAL MATCH (d:Document)-[:MENTIONS]->(n)
         WITH n, lbls,
              collect(DISTINCT d.page) AS pages,
              collect(DISTINCT coalesce(d.section_label, '')) AS section_labels
@@ -106,50 +142,90 @@ def _fetch_kg_terms_safe(adapter: Any) -> list[dict[str, Any]]:
 
 
 def _build_kg_glossary(adapter: Any) -> list[dict[str, Any]]:
+    """KG 행 → 글로서리 항목. 영문/한글 alias 통합 (entity_normalizer).
+
+    LLMGraphTransformer 가 영문 'Augustine' 노드와 한글 '어거스틴' 노드를 분리
+    추출할 수 있으므로, normalize_entity_id 로 canonical 키에 통합 + 등장한 모든
+    raw form 을 aliases 에 누적.
+    """
     rows = _fetch_kg_terms_safe(adapter)
     alias_lookup = _build_alias_lookup()
 
-    out: list[dict[str, Any]] = []
+    try:
+        from rag_core.kg.entity_normalizer import (
+            ENTITY_ALIASES,
+            is_noise_entity,
+            normalize_entity_id,
+        )
+    except ImportError:
+        ENTITY_ALIASES = {}
+        normalize_entity_id = lambda x: x.strip()  # noqa: E731
+        is_noise_entity = lambda x: False  # noqa: E731
+
+    # canonical term → 누적 데이터
+    by_canonical: dict[str, dict[str, Any]] = {}
+    skipped_noise = 0
+    skipped_generic = 0
     for row in rows:
-        term = (row.get("term") or "").strip()
-        if not term:
+        raw_term = (row.get("term") or "").strip()
+        if not raw_term or is_noise_entity(raw_term):
+            skipped_noise += 1
             continue
-        # aliases — alias 사전 + 반대 방향 (canonical 이 term 인 경우)
-        aliases = alias_lookup.get(term, []).copy()
-        # 만약 term 자체가 raw form 이면 canonical 도 alias 로
-        try:
-            from rag_core.kg.entity_normalizer import ENTITY_ALIASES
+        canonical = normalize_entity_id(raw_term)
+        # blacklist + 길이 필터 — phrase / 너무 일반적인 단어 제외
+        if _is_glossary_noise(canonical):
+            skipped_generic += 1
+            continue
 
-            canonical = ENTITY_ALIASES.get(term)
-            if canonical and canonical != term:
-                aliases.append(canonical)
-        except ImportError:
-            pass
+        # 기존 entry 또는 새로 생성
+        entry = by_canonical.setdefault(
+            canonical,
+            {
+                "term": canonical,
+                "aliases": list(alias_lookup.get(canonical, [])),
+                "definition": "",
+                "sources": [],
+                "source": "kg",
+            },
+        )
 
-        # sources — 페이지별로 1줄
+        # raw_term 이 canonical 과 다르면 alias 로 누적 (영문/이형)
+        if raw_term != canonical and raw_term not in entry["aliases"]:
+            entry["aliases"].append(raw_term)
+
+        # description 은 첫 등장의 것 사용 (또는 가장 긴 것)
+        candidate_desc = (row.get("description") or "").strip()
+        if candidate_desc and (
+            not entry["definition"] or len(candidate_desc) > len(entry["definition"])
+        ):
+            entry["definition"] = candidate_desc
+
+        # sources 누적 (페이지 dedup)
         pages = row.get("pages") or []
         section_labels = row.get("section_labels") or []
-        sources: list[dict[str, Any]] = []
+        existing_pages = {s["page"] for s in entry["sources"]}
         for i, p in enumerate(pages):
             if p is None:
                 continue
+            page_int = int(p) + 1 if isinstance(p, int) else int(p)
+            if page_int in existing_pages:
+                continue
             label_str = section_labels[i] if i < len(section_labels) else ""
-            sources.append(
-                {
-                    "page": int(p) + 1 if isinstance(p, int) else int(p),
-                    "label": _make_label(int(p) + 1 if isinstance(p, int) else int(p), label_str),
-                }
+            entry["sources"].append(
+                {"page": page_int, "label": _make_label(page_int, label_str)}
             )
-        out.append(
-            {
-                "term": term,
-                "aliases": list(dict.fromkeys(aliases)),  # dedup
-                "definition": row.get("description", "").strip(),
-                "sources": sources,
-                "source": "kg",
-            }
+            existing_pages.add(page_int)
+
+    # alias dedup
+    for entry in by_canonical.values():
+        entry["aliases"] = list(dict.fromkeys(entry["aliases"]))
+
+    if skipped_noise or skipped_generic:
+        print(
+            f"  필터: noise={skipped_noise}, generic/phrase={skipped_generic}",
+            flush=True,
         )
-    return out
+    return list(by_canonical.values())
 
 
 def _union_with_curated(

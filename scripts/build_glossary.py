@@ -53,7 +53,6 @@ from rag_core.kg.section_filter import (
     filter_chunks_by_sections,
 )
 
-
 _DEFAULT_OUT = _PROJECT_ROOT / "data" / "glossary" / "calvin.json"
 
 
@@ -146,9 +145,7 @@ def _extract_section(
     max_context_chars: int = 24000,
 ) -> list[dict]:
     """단원의 청크들을 하나로 합쳐 LLM 호출, 글로서리 항목 반환."""
-    section_chunks = [
-        c for c in chunks if c.metadata.get("section_slug") == section.slug
-    ]
+    section_chunks = [c for c in chunks if c.metadata.get("section_slug") == section.slug]
     if not section_chunks:
         print(f"  [skip] {section.slug} {section.label} — 청크 0개", flush=True)
         return []
@@ -232,14 +229,12 @@ def main() -> int:
     out_path = Path(args.out).expanduser().resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/3] Hybrid RAG 인덱스 로드 중 (캐시 활용)...", flush=True)
+    print("[1/3] Hybrid RAG 인덱스 로드 중 (캐시 활용)...", flush=True)
     rag = build_calvin_rag()
 
     print("[2/3] 5단원 청크 필터링...", flush=True)
     # retriever 의 chunks 직접 접근 (HybridRetriever 의 indexed chunks)
-    raw_chunks = getattr(rag.retriever, "_chunks", None) or getattr(
-        rag.retriever, "chunks", None
-    )
+    raw_chunks = getattr(rag.retriever, "_chunks", None) or getattr(rag.retriever, "chunks", None)
     if raw_chunks is None:
         # fallback — PDF 재로드 후 split (캐시 미사용)
         from infra.document_loader import load_calvin
