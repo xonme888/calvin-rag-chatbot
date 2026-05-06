@@ -71,6 +71,17 @@ export interface ChatStreamMeta {
   from_cache?: boolean; // 모든 LLM 호출이 캐시 hit 이면 true
   // 글로서리 매칭 — 답변 안 inline tooltip 데이터
   matched_terms?: MatchedTerm[];
+  // chat_v2 전용 — 오케스트레이터의 의도 분류 / 재구성 / 선택된 strategy
+  intent?:
+    | "new_question"
+    | "followup"
+    | "meta_recap"
+    | "meta_reference"
+    | "smalltalk"
+    | null;
+  standalone_question?: string | null;
+  selected_strategy?: string | null;
+  trace_id?: string;
 }
 
 export interface MatchedTerm {
@@ -155,11 +166,17 @@ export async function fetchModes(): Promise<ModeInfo[]> {
   return j.modes;
 }
 
+// 동기/스트리밍 chat 호출. 환경변수 NEXT_PUBLIC_CHAT_V2 로 /chat/v2 (대화 우선 오케스트레이터)
+// 와 /chat/sync (레거시) 사이를 토글한다 — PR 5/6 점진 절체용.
+const CHAT_V2_ENABLED = process.env.NEXT_PUBLIC_CHAT_V2 === "true";
+const CHAT_SYNC_PATH = CHAT_V2_ENABLED ? "/chat/v2" : "/chat/sync";
+const CHAT_STREAM_PATH = CHAT_V2_ENABLED ? "/chat/v2/stream" : "/chat/stream";
+
 export async function chatSync(
   req: ChatRequest,
   signal?: AbortSignal,
 ): Promise<ChatSyncResponse> {
-  const r = await fetch(`${API_BASE}/chat/sync`, {
+  const r = await fetch(`${API_BASE}${CHAT_SYNC_PATH}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...inviteHeaders() },
     body: JSON.stringify(req),
@@ -193,7 +210,7 @@ export async function* chatStream(
   req: ChatRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamChunk> {
-  const r = await fetch(`${API_BASE}/chat/stream`, {
+  const r = await fetch(`${API_BASE}${CHAT_STREAM_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
