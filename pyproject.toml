@@ -66,6 +66,11 @@ api = [
     "httpx>=0.27",              # CF JWKS fetch
 ]
 
+# Phase 11: Supabase 영속화 (PRD-002 / TRD-011)
+persistence = [
+    "supabase>=2.7",            # ConversationStore Supabase 어댑터
+]
+
 # 한 번에 다 설치
 all = [
     "flashrank>=0.2.0",
@@ -79,6 +84,7 @@ all = [
     "slowapi>=0.1.9",
     "pyjwt[crypto]>=2.8",
     "httpx>=0.27",
+    "supabase>=2.7",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
