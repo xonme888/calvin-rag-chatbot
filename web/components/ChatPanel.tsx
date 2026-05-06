@@ -233,7 +233,7 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex flex-col h-full flex-1 max-w-3xl w-full mx-auto">
+    <div className="flex flex-col h-full flex-1 w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
         <h1 className="text-lg font-semibold truncate flex items-center gap-2">
           {isPending && (
@@ -333,8 +333,8 @@ export function ChatPanel({
               className={[
                 "rounded-lg px-4 py-3 text-sm",
                 m.role === "user"
-                  ? "bg-primary text-white ml-12"
-                  : "bg-white border border-slate-200 mr-12",
+                  ? "bg-primary text-white ml-4 sm:ml-12"
+                  : "bg-white border border-slate-200 mr-4 sm:mr-12",
               ].join(" ")}
             >
               {blocks.map((b, bi) => {
