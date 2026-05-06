@@ -185,7 +185,8 @@ def _maybe_register_kg(
             config=KGStrategyConfig(),
         )
     )
-    _logger.info("KG strategy registered (nodes=%d)", nodes)
+    # warning 레벨로 격상 — 운영 root logger 의 INFO 차단 환경에서도 가시성 보장.
+    _logger.warning("KG strategy registered (nodes=%d)", nodes)
 
 
 def _maybe_register_vision(

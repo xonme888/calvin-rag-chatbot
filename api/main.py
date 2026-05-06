@@ -116,3 +116,19 @@ app.include_router(chat_v2.router)
 app.include_router(title.router)
 app.include_router(invite.router)
 app.include_router(glossary.router)
+
+
+# ---- 부팅 시 chat_v2 orchestrator 사전 빌드 ----
+# lru_cache 라 첫 /chat/v2 호출 시까지 lazy 인데, 그러면 KG/Agentic 등록 로그가
+# 부팅 단계가 아니라 *첫 요청 응답 후* 에야 보여 진단이 어렵다. 부팅 직후 1회 호출로
+# 등록 결과 (KG nodes / Agentic / Vision) 를 즉시 stdout 에 노출.
+@app.on_event("startup")
+async def _prebuild_chat_v2_orchestrator() -> None:
+    try:
+        chat_v2._orchestrator()
+    except Exception as e:  # noqa: BLE001 — 부팅은 막지 않는다
+        import logging as _lg
+
+        _lg.getLogger(__name__).warning(
+            "chat_v2 orchestrator prebuild failed: %s: %s", type(e).__name__, e
+        )
