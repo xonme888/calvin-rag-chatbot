@@ -53,7 +53,6 @@ def load_env() -> bool:
         load_dotenv(env_file)
     else:
         load_dotenv()
-
     api_key = os.getenv("OPENAI_API_KEY", "")
     return bool(api_key) and api_key != "sk-your-key-here"
 
