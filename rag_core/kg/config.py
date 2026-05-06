@@ -23,6 +23,9 @@ class Neo4jConfig(BaseSettings):
     uri: Annotated[str, Field(alias="NEO4J_URI")] = "bolt://localhost:7687"
     username: Annotated[str, Field(alias="NEO4J_USERNAME")] = "neo4j"
     password: Annotated[SecretStr, Field(alias="NEO4J_PASSWORD")] = SecretStr("password")
+    # Aura 일부 인스턴스는 default db 가 'neo4j' 가 아니라 인스턴스 ID 와 같은 명
+    # (예: e11f5ad8). NEO4J_DATABASE 미설정 시 'neo4j' 사용.
+    database: Annotated[str, Field(alias="NEO4J_DATABASE")] = "neo4j"
 
     # KG 인덱싱 모델 설정 (LLMGraphTransformer 용)
     openai_model: Annotated[str, Field(alias="OPENAI_MODEL")] = "gpt-4o-mini"

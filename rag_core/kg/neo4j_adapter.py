@@ -42,6 +42,7 @@ class Neo4jAdapter:
             url=config.uri,
             username=config.username,
             password=config.password.get_secret_value(),
+            database=config.database,
             refresh_schema=False,  # 인덱싱 전엔 스키마 가져오기 무의미
         )
 
