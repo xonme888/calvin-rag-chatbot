@@ -40,6 +40,7 @@ RUN pip install --upgrade pip && \
 # ---- 애플리케이션 코드 ----
 COPY api ./api
 COPY rag_core ./rag_core
+COPY chatbot ./chatbot
 COPY infra ./infra
 COPY scripts ./scripts
 COPY data/glossary ./data/glossary
