@@ -304,3 +304,98 @@ def test_chat_v2_stream_라우트_등록() -> None:
     paths = resp.json()["paths"]
     assert "/chat/v2/stream" in paths
     assert "/chat/stream" in paths  # 레거시 보존
+
+
+# ============================================================
+# chat_history → Conversation.turns 복원 (브라우저 보유 history 패턴)
+# ============================================================
+def test_chat_v2_chat_history_가_state_turns_로_복원(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """클라이언트가 보낸 chat_history 가 ConversationState.conversation.turns 로 복원되어
+    last_turn / META_RECAP 등의 노드 분기에 사용됨을 검증."""
+    captured: list = []
+
+    class _CaptureOrch:
+        def invoke(self, state, config=None):  # type: ignore[no-untyped-def]
+            captured.append(state)
+            from datetime import UTC, datetime as _dt
+
+            from chatbot.domain.conversation import Message as _Msg
+            from chatbot.domain.conversation import Turn as _Turn
+
+            answer = _Msg(role="assistant", content="echo")
+            return state.model_copy(
+                update={
+                    "conversation": state.conversation.append_turn(
+                        _Turn(
+                            user_message=state.pending_user_message,
+                            intent=Intent.NEW_QUESTION,
+                            answer=answer,
+                            trace_id=state.trace_id,
+                            elapsed_ms=1,
+                            started_at=_dt.now(UTC),
+                        )
+                    ),
+                    "pending_intent": Intent.NEW_QUESTION,
+                    "pending_answer": answer,
+                }
+            )
+
+    _install_orchestrator(_reset_state, _CaptureOrch())
+    client = TestClient(app)
+    resp = client.post(
+        "/chat/v2",
+        json={
+            "question": "위 내용 요약",
+            "chat_history": [
+                {"role": "user", "content": "예정론?"},
+                {"role": "assistant", "content": "예정론은 칼빈 신학의 핵심..."},
+                {"role": "user", "content": "베자는?"},
+                {"role": "assistant", "content": "베자는 칼빈의 후계자..."},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert len(captured) == 1
+    state = captured[0]
+    assert len(state.conversation.turns) == 2  # 4 메시지 → 2 페어 → 2 Turn
+    assert state.conversation.turns[0].user_message.content == "예정론?"
+    assert state.conversation.turns[0].answer.content.startswith("예정론은")
+    assert state.conversation.turns[1].user_message.content == "베자는?"
+    assert state.conversation.last_turn is not None
+
+
+def test_chat_v2_빈_chat_history_빈_turns(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """chat_history 미전달 시 turns 빈 tuple — 첫 턴 동작 보존."""
+    captured: list = []
+
+    class _Orch:
+        def invoke(self, state, config=None):  # type: ignore[no-untyped-def]
+            captured.append(state)
+            from datetime import UTC, datetime as _dt
+
+            from chatbot.domain.conversation import Message as _Msg
+            from chatbot.domain.conversation import Turn as _Turn
+
+            answer = _Msg(role="assistant", content="ok")
+            return state.model_copy(
+                update={
+                    "conversation": state.conversation.append_turn(
+                        _Turn(
+                            user_message=state.pending_user_message,
+                            intent=Intent.NEW_QUESTION,
+                            answer=answer,
+                            trace_id=state.trace_id,
+                            elapsed_ms=0,
+                            started_at=_dt.now(UTC),
+                        )
+                    ),
+                    "pending_intent": Intent.NEW_QUESTION,
+                    "pending_answer": answer,
+                }
+            )
+
+    _install_orchestrator(_reset_state, _Orch())
+    client = TestClient(app)
+    resp = client.post("/chat/v2", json={"question": "처음", "chat_history": []})
+    assert resp.status_code == 200
+    assert captured[0].conversation.turns == ()

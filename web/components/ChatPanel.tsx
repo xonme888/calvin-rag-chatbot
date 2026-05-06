@@ -142,6 +142,13 @@ export function ChatPanel({
       mode: startMode,
     });
 
+    // 멀티턴 — 진입 시점의 session.messages 를 chat_history 로 전달.
+    // 브라우저 IndexedDB 가 진실원천이고 매 호출마다 history 를 함께 보낸다 (영속화 전 단계).
+    const chat_history = session.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     try {
       if (startMode === "hybrid" || startMode === "auto") {
         // auto/hybrid 는 SSE 스트리밍 시도. 백엔드 라우터가 다른 모드로
@@ -153,6 +160,7 @@ export function ChatPanel({
           mode: startMode,
           previous_mode: previousMode ?? undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
+          chat_history,
         })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
@@ -184,6 +192,7 @@ export function ChatPanel({
           mode: startMode,
           previous_mode: previousMode ?? undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
+          chat_history,
         });
         next = [
           ...next.slice(0, -1),

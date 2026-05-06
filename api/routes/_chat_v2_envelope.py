@@ -11,14 +11,21 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from api.schemas import ChatRequest, ChatSyncResponse
+from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from chatbot.domain.conversation import Attachment as DomainAttachment
-from chatbot.domain.conversation import Conversation, Message
+from chatbot.domain.conversation import Conversation, Message, Turn
+from chatbot.domain.intent import Intent
 from chatbot.domain.state import ConversationState
 
 
 def to_state(*, req: ChatRequest, trace_id: str) -> ConversationState:
-    """ChatRequest → ConversationState. 매 호출 새 conversation (영속화는 PRD-002 합류 후)."""
+    """ChatRequest → ConversationState. ``chat_history`` 가 있으면 가짜 Turn 시퀀스로
+    복원해 ``conversation.turns`` 를 채운다.
+
+    영속화 전 단계의 *클라이언트 보유 history* 패턴 — 브라우저 IndexedDB 가 진실원천이고
+    매 요청마다 chat_history 를 함께 보낸다. PRD-002(영속화) 합류 시점에는 conversation_id
+    로 서버측 복원이 추가된다 — 본 함수는 그 전 단계.
+    """
     user_message = Message(
         role="user",
         content=req.question,
@@ -27,13 +34,51 @@ def to_state(*, req: ChatRequest, trace_id: str) -> ConversationState:
     return ConversationState(
         conversation=Conversation(
             id=trace_id,
-            turns=tuple(),
+            turns=_history_to_turns(req.chat_history, parent_trace_id=trace_id),
             created_at=datetime.now(UTC),
         ),
         pending_user_message=user_message,
         trace_id=trace_id,
         started_at_ms=int(time.time() * 1000),
     )
+
+
+def _history_to_turns(
+    history: list[ChatMessage],
+    *,
+    parent_trace_id: str,
+) -> tuple[Turn, ...]:
+    """ChatMessage 시퀀스 → Turn 시퀀스. user → assistant 인접 페어 1개당 Turn 1개.
+
+    메타 필드 (intent / selected_strategy / standalone_question 등) 는 placeholder —
+    클라이언트가 *과거 메타*를 보내지 않기 때문. compose_answer 의 history_messages 헬퍼는
+    user/assistant 본문만 사용하므로 답변 합성 정확도 영향 없음.
+    """
+    turns: list[Turn] = []
+    now = datetime.now(UTC)
+    pending_user: ChatMessage | None = None
+    for msg in history:
+        if msg.role == "user":
+            pending_user = msg
+            continue
+        # assistant — 직전 user 와 페어. user 없으면 무시 (history 손상 케이스).
+        if pending_user is None:
+            continue
+        turns.append(
+            Turn(
+                user_message=Message(role="user", content=pending_user.content),
+                intent=Intent.NEW_QUESTION,
+                standalone_question=None,
+                selected_strategy=None,
+                retrieval_result_ref=None,
+                answer=Message(role="assistant", content=msg.content),
+                trace_id=parent_trace_id,
+                elapsed_ms=0,
+                started_at=now,
+            )
+        )
+        pending_user = None
+    return tuple(turns)
 
 
 def _to_attachment(att: Any) -> DomainAttachment:
