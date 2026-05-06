@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from chatbot.application.orchestrator import build_orchestrator
 from chatbot.application.registries import (
@@ -70,6 +70,53 @@ def build_default_orchestrator(
         router=router,
         answerer=answerer,
     )
+
+
+def build_persistence_from_env() -> tuple[Any | None, Any]:
+    """환경변수 → (ConversationStore | None, UserIdentifier).
+
+    SUPABASE_URL + SUPABASE_SERVICE_KEY 모두 있으면 Supabase 어댑터 빌드.
+    AUTH_ENABLED=false 또는 환경변수 미설정 시 (None, AnonymousUserIdentifier) — 익명 모드.
+
+    chat_v2 라우트의 ``_persistence()`` lru_cache 가 본 함수를 1회 호출해 컴포넌트 보유.
+    """
+    import logging as _lg
+
+    from chatbot.infrastructure.auth import AnonymousUserIdentifier
+
+    _logger = _lg.getLogger(__name__)
+
+    if _flag_disabled("AUTH_ENABLED"):
+        _logger.warning("Persistence disabled — AUTH_ENABLED=false")
+        return (None, AnonymousUserIdentifier())
+
+    url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    if not url or not service_key:
+        _logger.warning(
+            "Persistence not configured — SUPABASE_URL/SUPABASE_SERVICE_KEY 미설정. 익명 모드."
+        )
+        return (None, AnonymousUserIdentifier())
+
+    try:
+        from supabase import create_client
+
+        from chatbot.infrastructure.auth import SupabaseUserIdentifier
+        from chatbot.infrastructure.persistence import SupabaseConversationStore
+    except ImportError as e:
+        _logger.warning("Persistence import 실패 (supabase 미설치): %s", e)
+        return (None, AnonymousUserIdentifier())
+
+    try:
+        client = create_client(url, service_key)
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("Supabase client 생성 실패: %s", e)
+        return (None, AnonymousUserIdentifier())
+
+    store = SupabaseConversationStore(client=client)
+    identifier = SupabaseUserIdentifier(client=client)
+    _logger.warning("Persistence registered (Supabase)")
+    return (store, identifier)
 
 
 def _build_hybrid_strategy(*, hybrid_rag: HybridRAG, llm: BaseChatModel) -> HybridStrategy:

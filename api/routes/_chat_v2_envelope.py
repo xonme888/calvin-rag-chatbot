@@ -15,31 +15,60 @@ from api.schemas import ChatMessage, ChatRequest, ChatSyncResponse
 from chatbot.domain.conversation import Attachment as DomainAttachment
 from chatbot.domain.conversation import Conversation, Message, Turn
 from chatbot.domain.intent import Intent
+from chatbot.domain.persistence import ConversationStore
 from chatbot.domain.state import ConversationState
 
 
-def to_state(*, req: ChatRequest, trace_id: str) -> ConversationState:
-    """ChatRequest → ConversationState. ``chat_history`` 가 있으면 가짜 Turn 시퀀스로
-    복원해 ``conversation.turns`` 를 채운다.
+def to_state(
+    *,
+    req: ChatRequest,
+    trace_id: str,
+    store: ConversationStore | None = None,
+    user_id: str | None = None,
+) -> ConversationState:
+    """ChatRequest → ConversationState.
 
-    영속화 전 단계의 *클라이언트 보유 history* 패턴 — 브라우저 IndexedDB 가 진실원천이고
-    매 요청마다 chat_history 를 함께 보낸다. PRD-002(영속화) 합류 시점에는 conversation_id
-    로 서버측 복원이 추가된다 — 본 함수는 그 전 단계.
+    영속화 우선순위:
+    1. ``store`` + ``user_id`` + ``req.conversation_id`` 모두 있고 store.load 가 conversation
+       반환 → *Supabase 진실원천* 으로 turns 복원. PRD-002 §결정 4.
+    2. 그 외 — ``req.chat_history`` 를 가짜 Turn 시퀀스로 복원 (PR 6 의 클라이언트-보유 history
+       패턴). AUTH 비활성·익명·미설정 환경에서의 fallback.
     """
     user_message = Message(
         role="user",
         content=req.question,
         attachments=tuple(_to_attachment(a) for a in req.attachments),
     )
+    conversation = _resolve_conversation(req=req, trace_id=trace_id, store=store, user_id=user_id)
     return ConversationState(
-        conversation=Conversation(
-            id=trace_id,
-            turns=_history_to_turns(req.chat_history, parent_trace_id=trace_id),
-            created_at=datetime.now(UTC),
-        ),
+        conversation=conversation,
         pending_user_message=user_message,
         trace_id=trace_id,
         started_at_ms=int(time.time() * 1000),
+    )
+
+
+def _resolve_conversation(
+    *,
+    req: ChatRequest,
+    trace_id: str,
+    store: ConversationStore | None,
+    user_id: str | None,
+) -> Conversation:
+    """영속화 진실원천 결정 — Supabase 우선, chat_history fallback."""
+    if store is not None and user_id and req.conversation_id:
+        loaded = store.load(req.conversation_id, user_id=user_id)
+        if loaded is not None:
+            return loaded
+    # 새 conversation_id 또는 영속화 미설정 — chat_history 로 복원.
+    # Supabase conversations.id 가 uuid 타입이라 trace_id (16자 hex) 사용 불가 — 새 uuid4 생성.
+    import uuid as _uuid
+
+    new_id = req.conversation_id or str(_uuid.uuid4())
+    return Conversation(
+        id=new_id,
+        turns=_history_to_turns(req.chat_history, parent_trace_id=trace_id),
+        created_at=datetime.now(UTC),
     )
 
 

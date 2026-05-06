@@ -61,6 +61,13 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="첨부물 (이미지 등). 비어있지 않으면 router 가 vision 모드로 강제.",
     )
+    conversation_id: str | None = Field(
+        default=None,
+        description=(
+            "Supabase 영속화용 conversation uuid. 있으면 서버가 store.load 로 기존 turns 복원. "
+            "None 이면 새 conversation. AUTH 비활성 또는 store 미설정 시 무시."
+        ),
+    )
 
 
 class ChatSyncResponse(BaseModel):
