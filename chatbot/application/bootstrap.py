@@ -117,7 +117,7 @@ def _maybe_register_agentic(
     hybrid_rag: HybridRAG,
     llm: BaseChatModel,
 ) -> None:
-    if not _flag_enabled("AGENTIC_ENABLED"):
+    if _flag_disabled("AGENTIC_ENABLED"):
         return
     from chatbot.infrastructure.strategies import AgenticStrategy, AgenticStrategyConfig
 
@@ -137,7 +137,7 @@ def _maybe_register_kg(
     hybrid_rag: HybridRAG,
     llm: BaseChatModel,
 ) -> None:
-    if not _flag_enabled("KG_ENABLED"):
+    if _flag_disabled("KG_ENABLED"):
         return
     try:
         from rag_core.kg.factory import get_kg_adapter
@@ -155,12 +155,25 @@ def _maybe_register_kg(
     from chatbot.infrastructure.stores import port_to_graph_store
     from chatbot.infrastructure.strategies import KGStrategy, KGStrategyConfig
 
+    import logging as _lg
+
+    _logger = _lg.getLogger(__name__)
     try:
         port = get_kg_adapter()
     except Exception as e:  # noqa: BLE001 — Neo4j 미연결 등 시 등록 스킵
-        import logging as _lg
-
-        _lg.getLogger(__name__).warning("KG strategy not registered (Neo4j 연결 실패): %s", e)
+        _logger.warning("KG strategy not registered (Neo4j 연결 실패): %s", e)
+        return
+    # 기존 api/dependencies.py:get_kg_rag_or_none 와 동등 — health + 그래프 비어있음 가드.
+    try:
+        if not port.health_check():
+            _logger.warning("KG strategy not registered (Neo4j health_check 실패)")
+            return
+        nodes = port.stats().get("nodes", 0)
+        if nodes == 0:
+            _logger.warning("KG strategy not registered (그래프 비어 있음 — 인덱싱 필요)")
+            return
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("KG strategy not registered (stats 예외): %s", e)
         return
     registry.register(
         KGStrategy(
@@ -172,6 +185,7 @@ def _maybe_register_kg(
             config=KGStrategyConfig(),
         )
     )
+    _logger.info("KG strategy registered (nodes=%d)", nodes)
 
 
 def _maybe_register_vision(
@@ -197,4 +211,14 @@ def _maybe_register_vision(
 
 
 def _flag_enabled(env: str) -> bool:
+    """opt-in 게이트 — 환경변수가 명시적으로 truthy 일 때만 True."""
     return os.getenv(env, "").strip().lower() in ("1", "true", "yes")
+
+
+def _flag_disabled(env: str) -> bool:
+    """opt-out 게이트 — 환경변수가 명시적으로 falsy 일 때만 True.
+
+    미설정/truthy 는 *자동 활성화* — 기존 ``api/dependencies.get_kg_rag_or_none`` /
+    ``get_agentic_rag`` 의 동작과 동등 (Neo4j/도구 가용 시 자동 등록).
+    """
+    return os.getenv(env, "").strip().lower() in ("0", "false", "no")
