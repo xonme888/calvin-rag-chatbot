@@ -40,6 +40,34 @@ def test_heuristic_meta_recap():
     assert c.classify(message=_msg("정리해줘"), last_turn=_last_turn()) == Intent.META_RECAP
 
 
+def test_heuristic_meta_recap_대화_자체_지칭():
+    """운영에서 발견된 회귀 — '우리 무슨 대화를 한 것 같아' 류가 NEW_QUESTION 으로 잘못
+    분류되어 PDF 검색이 일어나던 문제.
+    """
+    c = HeuristicIntentClassifier()
+    cases = [
+        "우리 무슨 대화를 한 것 같아",
+        "내가 뭐 물어봤지?",
+        "여태 어떤 이야기 했지?",
+        "내가 한 질문이 뭐야",
+        "우리 뭐 얘기했어",
+        "내가 한 질문",
+    ]
+    for text in cases:
+        assert c.classify(message=_msg(text), last_turn=_last_turn()) == Intent.META_RECAP, (
+            f"META_RECAP 분류 실패: {text}"
+        )
+
+
+def test_heuristic_meta_reference_확장():
+    c = HeuristicIntentClassifier()
+    cases = ["아까 그 답변", "조금 전에 본 그래프", "이전 답변을 다시"]
+    for text in cases:
+        assert c.classify(message=_msg(text), last_turn=_last_turn()) == Intent.META_REFERENCE, (
+            f"META_REFERENCE 분류 실패: {text}"
+        )
+
+
 def test_heuristic_smalltalk():
     c = HeuristicIntentClassifier()
     assert c.classify(message=_msg("안녕하세요"), last_turn=None) == Intent.SMALLTALK
