@@ -88,10 +88,10 @@ all = [
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-# 패키지로 빌드 대상: rag_core, infra (app/api/web 은 진입 스크립트/별도 워크스페이스라 제외)
+# 패키지로 빌드 대상: rag_core, infra, chatbot (app/api/web 은 진입 스크립트/별도 워크스페이스라 제외)
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rag_core*", "infra*"]
+include = ["rag_core*", "infra*", "chatbot*"]
 exclude = ["app*", "api*", "web*", "tests*", "data*", "indexes*", ".venv*"]
 
 [tool.ruff]
