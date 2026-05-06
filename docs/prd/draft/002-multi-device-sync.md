@@ -2,6 +2,7 @@
 status: draft
 group: B
 created: 2026-05-04
+updated: 2026-05-06
 ---
 
 # PRD: 인증 + 다기기 세션 동기화
@@ -104,3 +105,60 @@ ADR 한 줄: 본 PRD 는 의도적 vendor lock-in (Supabase Auth + Postgres + Re
 - **회귀 위험 (저)**: 인증 추가 후 trace event 에 `user_id` 가 들어가면 PII 정책을 정해야 한다 (해시 권장). TRD 에서 확정.
 
 비고: SSE 인계, 권한/공유, encryption-at-rest 는 본 PRD 외. CRDT/오프라인 머지도 비-목표.
+
+---
+
+## 9. PR 6 합류 후 갱신 사항 (2026-05-06)
+
+PR 1~6 (대화 우선 오케스트레이터) 머지 후 본 PRD 의 *진실원천* 자체가 달라졌다 — 더 이상
+`useSessions` localStorage 어댑터가 아니라 ``chatbot.domain.persistence.ConversationStore``
+Protocol 이 추상이다. 본 절은 4가지 합의 결정사항만 명시한다.
+
+### 결정 1' — 인증 방식 (확정)
+
+**Supabase Auth + 이메일 Magic Link** (위 §5 결정 1 의 ★) 채택. 이유: 비밀번호 없는 UX,
+무료 한도 충분, Supabase Postgres 와 동일 콘솔.
+
+### 결정 2 — 영속화 스키마 (확정)
+
+**JSONB 1-table** — `conversations(id uuid pk, user_id uuid, state jsonb, updated_at timestamptz)`.
+
+이유:
+- chatbot 도메인의 ``Conversation`` 이 frozen Pydantic 이라 ``model_dump_json`` 으로
+  안전 직렬화. 스키마 변경 시 도메인만 갱신 — DB 마이그레이션 0.
+- 부분 쿼리·인덱싱은 ``state`` jsonb 위에 GIN 인덱스로 풀 수 있다 (예:
+  ``CREATE INDEX ON conversations USING GIN ((state->'turns'))``).
+
+**향후 정규화 출구** (옵션 c — 부분 쿼리 압박이 커지면):
+- 별도 `turns(conversation_id, idx, ...)` 테이블 추가. `state` 는 백업용 jsonb 로 유지.
+- 마이그레이션 SQL: jsonb_array_elements 로 turns 추출 → 새 테이블 INSERT.
+- 본 PRD 단계에서는 단순화 우선 — 정규화는 데이터 규모가 부분 쿼리 비용을 정당화할 때.
+
+### 결정 3 — Checkpointer (확정)
+
+**자체 ConversationStore 어댑터** (langgraph-checkpoint-postgres 미사용). 이유:
+- chatbot 도메인 모델이 frozen Pydantic — ``model_dump_json`` 로 안전 직렬화.
+- LangGraph checkpointer 는 ``messages`` 추상에 묶이는데 우리 도메인이 더 풍부함
+  (Turn = user_message + intent + standalone_question + selected_strategy + answer + ...).
+- Supabase RLS 정책과의 통합이 쉬움 (auth.uid() = user_id 직접 사용).
+
+### 결정 4 — 절체 방식 (확정)
+
+**Supabase 진실원천 + IndexedDB 캐시**. 이유:
+- 본 PRD 의 원래 목표 (다기기 동기화) 의 본질 — 서버가 진실원천이어야 두 디바이스에서
+  같은 데이터 보장.
+- IndexedDB 는 *오프라인 fallback + 첫 로딩 캐시* 역할.
+- 충돌 정책은 §5 결정 3 의 last-write-wins (서버 timestamp 기준) 그대로.
+
+### 추상 매핑 (PR 6 이후)
+
+| 이전 (localStorage 시대) | 현재 (chat_v2 + Supabase) |
+|---|---|
+| `web/lib/sessionStore.ts:useSessions` | 동일 외부 인터페이스 + 내부 어댑터를 `SupabaseSessionStore` 로 교체 |
+| `SessionMessage[]` 가 진실원천 | `chatbot.domain.Conversation` 이 진실원천 — frozen Pydantic, server roundtrip |
+| 매 호출 chat_history 전달 | `conversation_id` 전달 → 서버가 store.load() |
+| `useSessions` 어댑터 swap | `ConversationStore` Protocol 의 Supabase 구현체 주입 |
+
+### TRD 분리
+
+본 PRD 의 *기술 구현* 은 ``docs/trd/draft/011-supabase-persistence.md`` 가 담당한다.
