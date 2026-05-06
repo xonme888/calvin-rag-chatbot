@@ -6,7 +6,6 @@ RAG 본 호출은 Mock 으로 우회 (FastAPI dependency_overrides).
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -109,50 +108,48 @@ def test_chat_sync_rejects_invalid_dense_weight() -> None:
 
 
 # ====================================================================
-# /chat/sync — Mock RAG 로 정상 흐름 검증
+# /chat/sync — chat_v2 wrapper 동등성 (PR 6 Phase B)
 # ====================================================================
-def _make_mock_hybrid(answer: str = "mocked answer", sources: list[str] | None = None) -> Any:
-    sources = sources or ["src 1"]
-
-    class _MockHybrid:
-        config = SimpleNamespace(dense_weight=0.5)
-
-        def query(
-            self, question: str, chat_history: list | None = None, callbacks: list | None = None
-        ) -> dict:
-            return {
-                "final_answer": answer,
-                "source_documents": sources,
-                "metadata": {"pattern": "Hybrid", "elapsed_seconds": 0.05},
-            }
-
-    return _MockHybrid()
+# 본 라우트는 ``api/routes/chat_v2.chat_v2`` 로 위임 — mode 인자는 무시되고 orchestrator
+# 가 자동 라우팅한다. 입력 가드 / Pydantic 검증은 chat_v2 도 동일하게 적용.
+#
+# 정상 흐름의 envelope 검증은 ``tests/test_chat_v2_endpoint.py`` 가 별도로 다룬다.
 
 
-def test_chat_sync_hybrid_returns_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mock Hybrid 로 정상 흐름 — 입력 가드 통과 → mock 호출 → 출력 가드 → 응답."""
-    mock = _make_mock_hybrid(answer="예정론은 칼빈의 핵심 교리다.")
-    # ModeRegistry 가 lazy lookup 하므로 dependencies 모듈의 함수만 갈아끼우면 충분
-    monkeypatch.setattr("api.dependencies.get_hybrid_rag", lambda: mock)
+def test_chat_sync_wrapper_위임(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``/chat/sync`` 가 ``/chat/v2`` 와 동일 envelope 반환 — wrapper 동등성."""
+    from chatbot.domain.conversation import Message, Turn
+    from chatbot.domain.intent import Intent
+    from datetime import UTC, datetime
+    from api.routes import chat_v2 as chat_v2_module
 
+    class _FakeOrchestrator:
+        def invoke(self, state, config=None):  # type: ignore[no-untyped-def]
+            answer = Message(role="assistant", content="wrapped answer")
+            turn = Turn(
+                user_message=state.pending_user_message,
+                intent=Intent.NEW_QUESTION,
+                standalone_question=state.pending_user_message.content,
+                selected_strategy="hybrid",
+                answer=answer,
+                trace_id=state.trace_id,
+                elapsed_ms=1,
+                started_at=datetime.now(UTC),
+            )
+            return state.model_copy(
+                update={
+                    "conversation": state.conversation.append_turn(turn),
+                    "pending_intent": Intent.NEW_QUESTION,
+                    "pending_strategy": "hybrid",
+                    "pending_answer": answer,
+                }
+            )
+
+    monkeypatch.setattr(chat_v2_module, "_orchestrator", lambda: _FakeOrchestrator())
     client = TestClient(app)
-    resp = client.post(
-        "/chat/sync",
-        json={"question": "예정론?", "mode": "hybrid", "dense_weight": 0.5},
-    )
+    resp = client.post("/chat/sync", json={"question": "Q", "mode": "hybrid"})
     assert resp.status_code == 200
     data = resp.json()
-    assert "예정론" in data["answer"]
-    assert data["source_documents"] == ["src 1"]
-    assert data["metadata"]["pattern"] == "Hybrid"
-    assert data["elapsed_seconds"] >= 0
-
-
-def test_chat_sync_kg_unavailable_returns_503(monkeypatch: pytest.MonkeyPatch) -> None:
-    """KG 모드 + 인스턴스 None 일 때 503 반환."""
-    monkeypatch.setattr("api.dependencies.get_kg_rag_or_none", lambda: None)
-
-    client = TestClient(app)
-    resp = client.post("/chat/sync", json={"question": "Q", "mode": "kg"})
-    assert resp.status_code == 503
-    assert "Knowledge Graph" in resp.json()["detail"]
+    assert data["answer"] == "wrapped answer"
+    assert data["metadata"]["selected_strategy"] == "hybrid"
+    assert data["metadata"]["intent"] == "new_question"
