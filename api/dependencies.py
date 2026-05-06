@@ -46,21 +46,53 @@ def get_vision_rag() -> Any:
 @lru_cache(maxsize=1)
 def get_kg_rag_or_none() -> Any | None:
     """KG RAG — Neo4j 가용 + 그래프 인덱싱 됐을 때만 인스턴스. 아니면 None."""
+    import logging
+    import os
+
+    logger = logging.getLogger("kg_init")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        h = logging.StreamHandler()
+        h.setFormatter(logging.Formatter("[kg_init] %(levelname)s %(message)s"))
+        logger.addHandler(h)
+
+    uri = os.environ.get("NEO4J_URI", "<unset>")
+    user = os.environ.get("NEO4J_USERNAME", "<unset>")
+    pwd_set = bool(os.environ.get("NEO4J_PASSWORD"))
+    logger.info(f"env URI={uri[:40]}... USER={user} PASSWORD_set={pwd_set}")
+
     try:
         from rag_core.kg.factory import get_kg_adapter
         from rag_core.kg.pipeline import KnowledgeGraphRAG
-    except ImportError:
+    except ImportError as e:
+        logger.warning(f"import 실패 (의존성 미설치): {e}")
         return None
 
     try:
         adapter = get_kg_adapter()
-        if not adapter.health_check():
-            return None
-        if adapter.stats().get("nodes", 0) == 0:
-            return None
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"adapter init 실패: {type(e).__name__}: {e}")
         return None
 
+    try:
+        ok = adapter.health_check()
+        logger.info(f"health_check: {ok}")
+        if not ok:
+            return None
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"health_check 예외: {type(e).__name__}: {e}")
+        return None
+
+    try:
+        stats = adapter.stats()
+        logger.info(f"stats: {stats}")
+        if stats.get("nodes", 0) == 0:
+            return None
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"stats 예외: {type(e).__name__}: {e}")
+        return None
+
+    logger.info("KG RAG init OK")
     return KnowledgeGraphRAG(kg_adapter=adapter, hybrid_rag=get_hybrid_rag())
 
 
