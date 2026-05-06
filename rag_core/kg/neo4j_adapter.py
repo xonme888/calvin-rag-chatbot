@@ -50,17 +50,17 @@ class Neo4jAdapter:
     # KnowledgeGraphPort 구현
     # ================================================================
     def health_check(self) -> bool:
-        """간단한 Cypher로 연결 확인. 실패 시 정확한 예외를 stderr 로 출력."""
+        """간단한 Cypher로 연결 확인. 실패 사유는 logger.warning 으로 노출."""
         try:
             result = self._graph.query("RETURN 1 AS ok")
             return bool(result and result[0].get("ok") == 1)
         except Exception as e:  # noqa: BLE001
-            import sys
+            import logging
 
-            print(
-                f"[kg_health_check] FAIL {type(e).__name__}: {str(e)[:300]}",
-                file=sys.stderr,
-                flush=True,
+            logging.getLogger("calvin.kg").warning(
+                "health_check Cypher 실패: %s: %s",
+                type(e).__name__,
+                str(e)[:200],
             )
             return False
 
