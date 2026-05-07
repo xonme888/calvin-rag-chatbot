@@ -4,13 +4,13 @@
     uvicorn api.main:app --reload --port 8000
 
 라우트:
-- GET  /health     — 헬스 체크
-- GET  /modes      — 사용 가능 모드 목록
-- GET  /stats      — 누적 사용 통계 (`infra/usage_tracker` 활용)
-- POST /chat/sync  — 동기 응답 (JSON, 디버깅/Phase B 가드 풀패스)
-- POST /chat/stream — SSE 스트리밍 (Vercel AI SDK Stream Protocol v1 호환)
+- GET  /health        — 헬스 체크
+- GET  /modes         — 사용 가능 모드 목록
+- GET  /stats         — 누적 사용 통계 (`infra/usage_tracker` 활용)
+- POST /chat/v2       — 대화 우선 오케스트레이터 (동기 JSON)
+- POST /chat/v2/stream — 대화 우선 오케스트레이터 (SSE Stream Protocol v1)
 
-Step 1 단계에선 ``/health`` 만 구현. 나머지는 Step 2 에서 추가.
+(구 레거시 라우트 ``/chat/sync``·``/chat/stream`` 은 PR 6 Phase B 절체 후 제거됨.)
 """
 
 from __future__ import annotations
@@ -62,7 +62,15 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.middleware.rate_limiter import limiter
-from api.routes import chat, chat_v2, glossary, health, invite, stats, title
+from api.routes import (
+    chat_v2,
+    conversations,
+    glossary,
+    health,
+    invite,
+    stats,
+    title,
+)
 
 app = FastAPI(
     title="Calvin RAG Chatbot API",
@@ -111,8 +119,8 @@ async def _rate_limit_exceeded_handler(request, exc):  # type: ignore[no-untyped
 
 app.include_router(health.router)
 app.include_router(stats.router)
-app.include_router(chat.router)
 app.include_router(chat_v2.router)
+app.include_router(conversations.router)
 app.include_router(title.router)
 app.include_router(invite.router)
 app.include_router(glossary.router)

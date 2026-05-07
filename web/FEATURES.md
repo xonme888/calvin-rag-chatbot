@@ -158,8 +158,8 @@
 | `GET /health` | ❌ | ❌ | 운영 모니터링용 |
 | `GET /modes` | F-MAIN-S02 (모드 가용성) | F-CMP-02 | ✓ 동작 |
 | `GET /stats` | F-MAIN-S09 | F-CMP-03 | ✓ 동작 |
-| `POST /chat/sync` | Agentic/KG 모드 | F-CMP-09 (3 모드 동시) | ✓ 동작 |
-| `POST /chat/stream` (SSE) | Hybrid 모드 | — | ✓ 동작 |
+| `POST /chat/v2` | Agentic/KG 모드 | F-CMP-09 (3 모드 동시) | ✓ 동작 |
+| `POST /chat/v2/stream` (SSE) | Hybrid 모드 | — | ✓ 동작 |
 | `POST /chat/agentic-stream` (Step별 이벤트) | F-AG-01~05 정밀 구현 시 | — | **신규 — P3** |
 
 → 시연 시점엔 기존 5개 엔드포인트로 충분. Agentic 단계 표시(F-AG-01~05)는 sync 메타로 갈음.

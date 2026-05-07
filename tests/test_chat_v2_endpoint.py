@@ -200,7 +200,6 @@ def test_chat_v2_라우트_등록_확인() -> None:
     assert resp.status_code == 200
     paths = resp.json()["paths"]
     assert "/chat/v2" in paths
-    assert "/chat/sync" in paths  # 기존 라우트 보존
 
 
 # ============================================================
@@ -303,7 +302,6 @@ def test_chat_v2_stream_라우트_등록() -> None:
     resp = client.get("/openapi.json")
     paths = resp.json()["paths"]
     assert "/chat/v2/stream" in paths
-    assert "/chat/stream" in paths  # 레거시 보존
 
 
 # ============================================================

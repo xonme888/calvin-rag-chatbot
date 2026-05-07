@@ -181,11 +181,10 @@ export async function fetchModes(): Promise<ModeInfo[]> {
   return j.modes;
 }
 
-// 동기/스트리밍 chat 호출. 환경변수 NEXT_PUBLIC_CHAT_V2 로 /chat/v2 (대화 우선 오케스트레이터)
-// 와 /chat/sync (레거시) 사이를 토글한다 — PR 5/6 점진 절체용.
-const CHAT_V2_ENABLED = process.env.NEXT_PUBLIC_CHAT_V2 === "true";
-const CHAT_SYNC_PATH = CHAT_V2_ENABLED ? "/chat/v2" : "/chat/sync";
-const CHAT_STREAM_PATH = CHAT_V2_ENABLED ? "/chat/v2/stream" : "/chat/stream";
+// 동기/스트리밍 chat 호출 — 대화 우선 오케스트레이터 (`/chat/v2`) 고정.
+// (구 레거시 `/chat/sync`·`/chat/stream` 라우트는 PR 6 Phase B 절체 후 제거됨.)
+const CHAT_SYNC_PATH = "/chat/v2";
+const CHAT_STREAM_PATH = "/chat/v2/stream";
 
 export async function chatSync(
   req: ChatRequest,
