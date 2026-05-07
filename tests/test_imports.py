@@ -26,7 +26,6 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "rag_core.tokenizer",
     "rag_core.reranker",
     "rag_core.retriever",
-    "rag_core.mode_dispatcher",
     # rag_core.guardrail 서브패키지
     "rag_core.guardrail",
     "rag_core.guardrail.port",
@@ -44,7 +43,6 @@ _MODULES_TO_IMPORT: tuple[str, ...] = (
     "rag_core.kg.neo4j_adapter",
     "rag_core.kg.section_filter",
     "rag_core.kg.entity_normalizer",
-    "rag_core.kg.graph_renderer",
     "rag_core.kg.pipeline",
     # infra
     "infra",

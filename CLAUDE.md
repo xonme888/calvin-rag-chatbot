@@ -4,16 +4,18 @@
 
 ## Project Overview
 
-칼빈 강요(Institutes of the Christian Religion, 1,251p) 기반 Streamlit 챗봇. 학습 repo(`rag-study-tracks`)와 분리된 production-leaning 프로젝트.
+칼빈 강요(Institutes of the Christian Religion, 1,251p) 기반 RAG 챗봇. Next.js 15 프론트 + FastAPI(LangGraph 오케스트레이터) 백엔드. 학습 repo(`rag-study-tracks`)와 분리된 production-leaning 프로젝트.
 
 - **모드 (v1)**: Hybrid (BM25+Dense+RRF) / Agentic (`langchain.agents.create_agent`)
-- **모드 (v2 예정)**: Knowledge Graph (Neo4j Aura + Cypher + 벡터 결합 + 관계 그래프 시각화)
+- **모드 (v2)**: Knowledge Graph (Neo4j Aura + Cypher + 벡터 결합)
 
 ## Folder Layout
 
 ```
 calvin-rag-chatbot/
-├── app/calvin_chatbot.py     Streamlit 진입점
+├── api/                      FastAPI (`/chat/v2`, `/chat/v2/stream`, …)
+├── web/                      Next.js 15 프론트엔드
+├── chatbot/                  대화 우선 도메인 + LangGraph 오케스트레이터
 ├── rag_core/                 RAG 코어 (외부 학습 코드 무의존)
 │   ├── tokenizer.py          KoreanTokenizer + BM25Retriever
 │   ├── postprocess.py        FlashRankReranker, reorder_long_context
@@ -31,12 +33,13 @@ calvin-rag-chatbot/
 ## Architecture: Hexagonal Dependency
 
 ```
-app/  ──►  rag_core/  ──►  infra/
+api/  ──►  chatbot/  ──►  rag_core/  ──►  infra/
 ```
 
 규칙:
-- `rag_core/`는 `app/`을 import하지 않는다.
-- `infra/`는 `rag_core/`를 import하지 않는다.
+- `rag_core/`는 `api/`·`chatbot/`을 import하지 않는다.
+- `infra/`는 `rag_core/`·`chatbot/`을 import하지 않는다.
+- `chatbot/`은 `api/`를 import하지 않는다.
 - **학습 repo(`rag-study-tracks`)의 어떤 모듈도 import하지 않는다.** 이 repo는 자체 완결적이어야 한다.
 
 ## Unified RAG Interface
@@ -78,7 +81,6 @@ INDEX_DIR=/Users/.../rag-study-tracks/indexes
 
 ## Common Pitfalls
 
-- **Streamlit sys.path 이슈**: `streamlit run app/calvin_chatbot.py`는 프로젝트 루트를 자동 추가하지 않는다. `app/calvin_chatbot.py` 상단에서 직접 추가.
 - **인덱스 캐시 키**: `make_cache_key("calvin", f"chunk{N}", f"overlap{M}")` 형식. chunk_size/overlap 변경 시 새 캐시 생성 → 임베딩 재발생.
 - **PDF 페이지 인덱싱**: PyMuPDFLoader는 `metadata["page"]`를 0-indexed로 저장. 사용자 표시 시 `+1`.
 - **시스템 프롬프트**: `HybridRAGConfig.system_prompt`는 `{context}` 자리표시자를 반드시 포함.
