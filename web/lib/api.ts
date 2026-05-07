@@ -2,6 +2,20 @@
 // Vercel AI SDK useChat 의 stream protocol 호환성 회피 (단순/통제 가능).
 
 import { inviteHeaders } from "./invite";
+import { getAccessToken } from "./supabase";
+
+/**
+ * 모든 인증 헤더 통합 — invite_code (legacy) + Supabase JWT (PR 14).
+ * Supabase 미설정 또는 미로그인 시 Authorization 헤더 생략 → 서버가 익명 처리.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...inviteHeaders() };
+  const token = await getAccessToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
@@ -29,6 +43,7 @@ export interface ChatRequest {
   dense_weight?: number;
   previous_mode?: RagMode; // '다른 모드로 재시도' 시 직전 라우팅 모드
   attachments?: Attachment[]; // 이미지 등 — 비어있지 않으면 vision 모드 강제
+  conversation_id?: string; // PR 14 — Supabase 영속화. 미로그인 시 미전송 → 서버가 chat_history fallback
 }
 
 // 단일 페이지 인용 라벨 — 백엔드 rag_core/citation_label.CitationLabel 와 동기화
@@ -178,7 +193,7 @@ export async function chatSync(
 ): Promise<ChatSyncResponse> {
   const r = await fetch(`${API_BASE}${CHAT_SYNC_PATH}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...inviteHeaders() },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify(req),
     signal,
   });
@@ -215,7 +230,7 @@ export async function* chatStream(
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-      ...inviteHeaders(),
+      ...(await authHeaders()),
     },
     body: JSON.stringify(req),
     cache: "no-store",

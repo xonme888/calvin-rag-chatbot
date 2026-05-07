@@ -161,6 +161,7 @@ export function ChatPanel({
           previous_mode: previousMode ?? undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
           chat_history,
+          conversation_id: startedSessionId,
         })) {
           if (chunk.type === "meta") {
             receivedMeta = chunk.meta;
@@ -193,6 +194,7 @@ export function ChatPanel({
           previous_mode: previousMode ?? undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
           chat_history,
+          conversation_id: startedSessionId,
         });
         next = [
           ...next.slice(0, -1),
