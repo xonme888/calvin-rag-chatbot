@@ -4,6 +4,11 @@ import { get as idbGet, set as idbSet } from "idb-keyval";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Attachment, ChatStreamMeta, ChatSyncResponse, Mode } from "./api";
+import {
+  deleteConversation as serverDeleteConversation,
+  fetchAllConversations,
+} from "./serverSessions";
+import { getCurrentUser, onAuthChange } from "./supabase";
 
 /**
  * 멀티 세션 영속화 — 1차 구현은 localStorage.
@@ -106,31 +111,46 @@ export function useSessions(): UseSessionsResult {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [ready, setReady] = useState(false);
 
-  // mount 후 IndexedDB 로딩 (SSR/CSR mismatch 회피, async)
-  // 첫 호출 시 localStorage 잔존 데이터를 IndexedDB 로 자동 마이그레이션
+  // mount 후 로딩:
+  //   1) 로그인 사용자 → 서버 진실원천 fetchAllConversations (Supabase). 비어있으면
+  //      IndexedDB fallback (옛 익명 세션 보존).
+  //   2) 미로그인 → IndexedDB only (이전 동작 그대로).
+  //   3) onAuthChange 구독 — 로그인/로그아웃 즉시 재로딩.
   useEffect(() => {
     if (typeof window === "undefined") return;
     let cancelled = false;
-    (async () => {
-      let loaded: ChatSession[] | undefined = await idbGet(KEY_SESSIONS);
+
+    async function loadSessions(): Promise<void> {
+      const user = await getCurrentUser();
+      if (cancelled) return;
+
+      let loaded: ChatSession[] | undefined;
       let storedActive: string | undefined = await idbGet(KEY_ACTIVE);
 
-      // localStorage → IndexedDB 마이그레이션 (한 번만)
-      if (!loaded) {
-        const lsRaw = localStorage.getItem(KEY_SESSIONS);
-        if (lsRaw) {
-          const fromLs = safeParse<ChatSession[]>(lsRaw, []);
-          if (fromLs.length > 0) {
-            await idbSet(KEY_SESSIONS, fromLs);
-            loaded = fromLs;
-            const lsActive = localStorage.getItem(KEY_ACTIVE);
-            if (lsActive) {
-              await idbSet(KEY_ACTIVE, lsActive);
-              storedActive = lsActive;
+      if (user) {
+        // 로그인 사용자 → 서버 진실원천 *only*. 비어있으면 빈 사이드바 (IndexedDB fallback X).
+        // 익명 IndexedDB 데이터는 SessionMigrationPrompt 가 처리.
+        loaded = await fetchAllConversations();
+        if (cancelled) return;
+      } else {
+        // 익명 모드 → IndexedDB
+        loaded = await idbGet(KEY_SESSIONS);
+        // localStorage → IndexedDB 일회성 마이그레이션 (legacy)
+        if (!loaded) {
+          const lsRaw = localStorage.getItem(KEY_SESSIONS);
+          if (lsRaw) {
+            const fromLs = safeParse<ChatSession[]>(lsRaw, []);
+            if (fromLs.length > 0) {
+              await idbSet(KEY_SESSIONS, fromLs);
+              loaded = fromLs;
+              const lsActive = localStorage.getItem(KEY_ACTIVE);
+              if (lsActive) {
+                await idbSet(KEY_ACTIVE, lsActive);
+                storedActive = lsActive;
+              }
+              localStorage.removeItem(KEY_SESSIONS);
+              localStorage.removeItem(KEY_ACTIVE);
             }
-            // localStorage 정리 — 향후 IndexedDB 가 단일 진실 소스
-            localStorage.removeItem(KEY_SESSIONS);
-            localStorage.removeItem(KEY_ACTIVE);
           }
         }
       }
@@ -146,9 +166,17 @@ export function useSessions(): UseSessionsResult {
         setActiveId(matched ? matched.id : loaded[0].id);
       }
       setReady(true);
-    })();
+    }
+
+    void loadSessions();
+    // 로그인/로그아웃 → 재로딩 (다기기 동기화 1차 — 새 디바이스 로그인 시 즉시 sync)
+    const unsub = onAuthChange(() => {
+      setReady(false);
+      void loadSessions();
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, []);
 
@@ -177,6 +205,8 @@ export function useSessions(): UseSessionsResult {
   }, []);
 
   const remove = useCallback((id: string) => {
+    // 서버에도 삭제 요청 (로그인 시) — fire-and-forget
+    void serverDeleteConversation(id);
     setSessions((prev) => {
       const next = prev.filter((s) => s.id !== id);
       if (next.length === 0) {

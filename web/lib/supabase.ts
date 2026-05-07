@@ -67,14 +67,26 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return { id: data.user.id, email: data.user.email ?? null };
 }
 
-/** Auth 상태 변화 구독 — 로그인/로그아웃 즉시 UI 반영. cleanup 함수 반환. */
+/**
+ * Auth 상태 변화 구독 — 로그인/로그아웃 즉시 UI 반영. cleanup 함수 반환.
+ *
+ * SIGNED_IN / SIGNED_OUT / USER_UPDATED 만 propagate. TOKEN_REFRESHED (1시간 주기)
+ * 와 INITIAL_SESSION 은 무시 — 사이드바/세션 재로딩의 N+1 호출을 막는다 (audit W1).
+ */
 export function onAuthChange(
   listener: (user: CurrentUser | null) => void,
 ): () => void {
   if (!supabase) return () => undefined;
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (
+      event !== "SIGNED_IN" &&
+      event !== "SIGNED_OUT" &&
+      event !== "USER_UPDATED"
+    ) {
+      return;
+    }
     if (!session?.user) {
       listener(null);
       return;

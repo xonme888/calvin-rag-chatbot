@@ -3,6 +3,7 @@
 import { AuthGate } from "@/components/AuthGate";
 import { ChatPanel } from "@/components/ChatPanel";
 import { InviteGate } from "@/components/InviteGate";
+import { SessionMigrationPrompt } from "@/components/SessionMigrationPrompt";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { useSessions } from "@/lib/sessionStore";
 
@@ -46,6 +47,7 @@ export default function HomePage() {
   return (
     <AuthGate>
       <InviteGate>
+        <SessionMigrationPrompt />
         <ChatHome />
       </InviteGate>
     </AuthGate>
