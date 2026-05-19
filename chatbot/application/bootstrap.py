@@ -119,6 +119,44 @@ def build_persistence_from_env() -> tuple[Any | None, Any]:
     return (store, identifier)
 
 
+def build_turn_artifact_store_from_env() -> Any | None:
+    """환경변수 기반 TurnArtifactStore 구성.
+
+    AUTH_ENABLED=false 또는 Supabase 미설정이면 None.
+    """
+    import logging as _lg
+
+    _logger = _lg.getLogger(__name__)
+    if _flag_disabled("AUTH_ENABLED"):
+        _logger.warning("Turn artifact store disabled — AUTH_ENABLED=false")
+        return None
+
+    url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    if not url or not service_key:
+        _logger.warning(
+            "Turn artifact store not configured — SUPABASE_URL/SUPABASE_SERVICE_KEY 미설정."
+        )
+        return None
+
+    try:
+        from supabase import create_client
+
+        from chatbot.infrastructure.persistence import SupabaseTurnArtifactStore
+    except ImportError as e:
+        _logger.warning("Turn artifact store import 실패 (supabase 미설치): %s", e)
+        return None
+
+    try:
+        client = create_client(url, service_key)
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("Supabase client 생성 실패 (artifact): %s", e)
+        return None
+
+    _logger.warning("Turn artifact store registered (Supabase)")
+    return SupabaseTurnArtifactStore(client=client)
+
+
 def _build_hybrid_strategy(*, hybrid_rag: HybridRAG, llm: BaseChatModel) -> HybridStrategy:
     """기존 HybridRAG 의 retriever/embeddings 를 *재사용* 해 4 strategy 가 같은 인덱스를 공유."""
     text_retriever = _build_hybrid_retriever(hybrid_rag)

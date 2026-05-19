@@ -14,7 +14,10 @@ from api.dependencies import reset_dependency_cache
 from api.main import app
 from api.routes import chat_v2 as chat_v2_module
 from chatbot.domain.conversation import Conversation, Message, Turn
+from chatbot.domain.corpus import Citation, DocumentRef
 from chatbot.domain.intent import Intent
+from chatbot.domain.retrieval import RetrievalResult
+from chatbot.domain.turn_artifact import make_retrieval_result_ref
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +66,20 @@ class _FakeIdentifier:
         return self.user_id
 
 
+class _FakeArtifactStore:
+    def __init__(self) -> None:
+        self.save_calls: list[tuple[str, str, int]] = []
+
+    def save_if_absent(self, artifact, *, user_id: str) -> None:  # type: ignore[no-untyped-def]
+        self.save_calls.append((artifact.conversation_id, user_id, artifact.turn_index))
+
+    def load_by_turn(self, conversation_id, turn_index, *, user_id):  # type: ignore[no-untyped-def]
+        return None
+
+    def load_by_ref(self, retrieval_result_ref, *, user_id):  # type: ignore[no-untyped-def]
+        return None
+
+
 class _AppendTurnOrch:
     """orchestrator stub — pending_user_message 를 새 Turn 으로 append."""
 
@@ -86,9 +103,69 @@ class _AppendTurnOrch:
         )
 
 
-def _install(monkeypatch, *, store, identifier, orch=None) -> None:  # type: ignore[no-untyped-def]
+class _AppendTurnWithRetrievalOrch:
+    """retrieval 결과를 함께 반환해 artifact save 경로를 검증."""
+
+    def invoke(self, state, config=None):  # type: ignore[no-untyped-def]
+        turn_index = len(state.conversation.turns)
+        retrieval_ref = make_retrieval_result_ref(state.conversation.id, turn_index)
+        answer = Message(role="assistant", content=f"echo:{state.pending_user_message.content}")
+        retrieval = RetrievalResult(
+            documents=(
+                DocumentRef(
+                    corpus_id="calvin",
+                    source_id="institutes_v1",
+                    chunk_id="chunk-1",
+                    page=10,
+                    content="본문",
+                    score=0.9,
+                ),
+            ),
+            citations=(
+                Citation(
+                    corpus_id="calvin",
+                    source_id="institutes_v1",
+                    page_label="p.11",
+                    snippet="본문",
+                ),
+            ),
+            metadata={"pattern": "hybrid"},
+        )
+        return state.model_copy(
+            update={
+                "conversation": state.conversation.append_turn(
+                    Turn(
+                        user_message=state.pending_user_message,
+                        intent=Intent.NEW_QUESTION,
+                        selected_strategy="hybrid",
+                        standalone_question=state.pending_user_message.content,
+                        retrieval_result_ref=retrieval_ref,
+                        answer=answer,
+                        trace_id=state.trace_id,
+                        elapsed_ms=1,
+                        started_at=datetime.now(UTC),
+                    )
+                ),
+                "pending_intent": Intent.NEW_QUESTION,
+                "pending_answer": answer,
+                "pending_retrieval": retrieval,
+            }
+        )
+
+
+def _install(  # type: ignore[no-untyped-def]
+    monkeypatch,
+    *,
+    store,
+    identifier,
+    orch=None,
+    artifact_store=None,
+    index_version: str = "idx-v1",
+) -> None:
     monkeypatch.setattr(chat_v2_module, "_persistence", lambda: (store, identifier))
     monkeypatch.setattr(chat_v2_module, "_orchestrator", lambda: orch or _AppendTurnOrch())
+    monkeypatch.setattr(chat_v2_module, "_artifact_store", lambda: artifact_store)
+    monkeypatch.setattr(chat_v2_module, "_artifact_index_version", lambda: index_version)
 
 
 # ============================================================
@@ -218,3 +295,31 @@ def test_different_user_conversation_id_load_returns_none(_reset_state) -> None:
     assert ("conv-1", "user-1") in store.load_calls
     # save 호출 → user-1 의 새 conversation 으로 (id=conv-1, 그러나 다른 user 라 충돌 X)
     assert store.save_calls[0][1] == "user-1"
+
+
+def test_retrieval_turn_아티팩트_저장(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    store = _FakeStore()
+    artifact_store = _FakeArtifactStore()
+    identifier = _FakeIdentifier(user_id="user-1")
+    _install(
+        _reset_state,
+        store=store,
+        identifier=identifier,
+        orch=_AppendTurnWithRetrievalOrch(),
+        artifact_store=artifact_store,
+        index_version="idx-v9",
+    )
+
+    client = TestClient(app)
+    resp = client.post(
+        "/chat/v2",
+        json={"question": "근거 보여줘"},
+        headers={"Authorization": "Bearer fake-jwt"},
+    )
+    assert resp.status_code == 200
+    assert len(store.save_calls) == 1
+    assert len(artifact_store.save_calls) == 1
+    cid, uid, turn_index = artifact_store.save_calls[0]
+    assert uid == "user-1"
+    assert turn_index == 0
+    assert cid

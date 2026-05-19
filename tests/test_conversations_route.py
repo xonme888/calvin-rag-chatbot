@@ -14,6 +14,7 @@ from api.routes import conversations as conv_module
 from chatbot.domain.conversation import Conversation, Message, Turn
 from chatbot.domain.intent import Intent
 from chatbot.domain.persistence import ConversationSummary
+from chatbot.domain.turn_artifact import TurnArtifact
 
 
 @pytest.fixture(autouse=True)
@@ -72,8 +73,34 @@ class _FakeIdentifier:
         return self.user_id
 
 
+class _FakeArtifactStore:
+    def __init__(self) -> None:
+        self.by_turn: dict[tuple[str, int, str], TurnArtifact] = {}
+
+    def save_if_absent(self, artifact: TurnArtifact, *, user_id: str) -> None:
+        self.by_turn[(artifact.conversation_id, artifact.turn_index, user_id)] = artifact
+
+    def load_by_turn(
+        self,
+        conversation_id: str,
+        turn_index: int,
+        *,
+        user_id: str,
+    ) -> TurnArtifact | None:
+        return self.by_turn.get((conversation_id, turn_index, user_id))
+
+    def load_by_ref(self, retrieval_result_ref: str, *, user_id: str) -> TurnArtifact | None:
+        for (_cid, _idx, uid), artifact in self.by_turn.items():
+            if uid == user_id and artifact.retrieval_result_ref == retrieval_result_ref:
+                return artifact
+        return None
+
+
 def _install(monkeypatch, *, store, identifier) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(conv_module, "_persistence", lambda: (store, identifier))
+    monkeypatch.setattr(conv_module, "_artifact_store", lambda: None)
+    monkeypatch.setattr(conv_module, "_artifact_index_version", lambda: "idx-v1")
+    monkeypatch.setattr(conv_module, "_artifact_ttl_days", lambda: 7)
 
 
 # ============================================================
@@ -264,3 +291,83 @@ def test_get_본인_full_conversation(_reset_state) -> None:  # type: ignore[no-
     body = resp.json()["conversation"]
     assert body["id"] == "c1"
     assert len(body["turns"]) == 1
+
+
+def test_turn_artifact_조회_200(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    store = _FakeStore()
+    artifact_store = _FakeArtifactStore()
+    _install(_reset_state, store=store, identifier=_FakeIdentifier(user_id="user-1"))
+    _reset_state.setattr(conv_module, "_artifact_store", lambda: artifact_store)
+    conv = Conversation(
+        id="c1",
+        turns=(
+            Turn(
+                user_message=Message(role="user", content="Q"),
+                intent=Intent.NEW_QUESTION,
+                standalone_question="Q",
+                selected_strategy="hybrid",
+                retrieval_result_ref="art:c1:0",
+                answer=Message(role="assistant", content="A"),
+                trace_id="t",
+                elapsed_ms=10,
+                started_at=datetime.now(UTC),
+            ),
+        ),
+        created_at=datetime.now(UTC),
+    )
+    store.save(conv, user_id="user-1")
+    artifact_store.save_if_absent(
+        TurnArtifact(
+            retrieval_result_ref="art:c1:0",
+            conversation_id="c1",
+            turn_index=0,
+            pattern="hybrid",
+            selected_strategy="hybrid",
+            standalone_question="Q",
+            index_version="idx-v1",
+            created_at=datetime.now(UTC),
+        ),
+        user_id="user-1",
+    )
+
+    client = TestClient(app)
+    resp = client.get("/conversations/c1/turns/0/artifact", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["artifact"]["retrieval_result_ref"] == "art:c1:0"
+    assert body["freshness"]["is_stale"] is False
+    assert body["requery_hint"]["question"] == "Q"
+    assert body["requery_hint"]["mode"] == "hybrid"
+
+
+def test_turn_artifact_미설정_503(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    store = _FakeStore()
+    _install(_reset_state, store=store, identifier=_FakeIdentifier(user_id="user-1"))
+    client = TestClient(app)
+    resp = client.get("/conversations/c1/turns/0/artifact", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 503
+
+
+def test_turn_artifact_없음_404(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    store = _FakeStore()
+    artifact_store = _FakeArtifactStore()
+    _install(_reset_state, store=store, identifier=_FakeIdentifier(user_id="user-1"))
+    _reset_state.setattr(conv_module, "_artifact_store", lambda: artifact_store)
+    conv = Conversation(
+        id="c1",
+        turns=(
+            Turn(
+                user_message=Message(role="user", content="Q"),
+                intent=Intent.NEW_QUESTION,
+                answer=Message(role="assistant", content="A"),
+                trace_id="t",
+                elapsed_ms=0,
+                started_at=datetime.now(UTC),
+            ),
+        ),
+        created_at=datetime.now(UTC),
+    )
+    store.save(conv, user_id="user-1")
+    client = TestClient(app)
+    resp = client.get("/conversations/c1/turns/0/artifact", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 404

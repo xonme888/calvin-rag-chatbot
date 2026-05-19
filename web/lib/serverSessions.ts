@@ -13,7 +13,7 @@
 
 import { getAccessToken } from "./supabase";
 import type { ChatSession, SessionMessage } from "./sessionStore";
-import type { Mode } from "./api";
+import type { ChatSyncResponse, Mode } from "./api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
@@ -28,6 +28,8 @@ interface ServerTurn {
   user_message: { role: "user"; content: string };
   answer: { role: "assistant"; content: string };
   selected_strategy: string | null;
+  standalone_question: string | null;
+  retrieval_result_ref: string | null;
   trace_id: string;
   elapsed_ms: number;
   started_at: string;
@@ -37,6 +39,40 @@ interface ServerConversation {
   id: string;
   turns: ServerTurn[];
   created_at: string;
+}
+
+interface TurnArtifactResponse {
+  artifact: {
+    pattern: string | null;
+    selected_strategy: string | null;
+    standalone_question: string | null;
+    citations: Array<{ page: number | null; page_label: string; source: string }>;
+    documents: Array<{
+      source_id: string;
+      page: number | null;
+      chunk_ref: string;
+      score: number | null;
+      preview: string;
+    }>;
+    graph: {
+      graph_node_count: number;
+      graph_edge_count: number;
+      top_nodes: string[];
+      top_edges: string[];
+    } | null;
+    tool_call_count: number;
+    tool_names: string[];
+    index_version: string;
+  };
+  freshness: {
+    is_stale: boolean;
+    artifact_index_version: string;
+    current_index_version: string;
+    ttl_days: number;
+  };
+  stale_reasons: string[];
+  requery_hint: { question: string; mode: string };
+  notice: string;
 }
 
 async function authedHeaders(): Promise<Record<string, string> | null> {
@@ -67,6 +103,20 @@ export async function fetchConversation(
   if (!r.ok) return null;
   const j = (await r.json()) as { conversation: ServerConversation };
   return j.conversation ?? null;
+}
+
+async function fetchTurnArtifact(
+  conversationId: string,
+  turnIndex: number,
+): Promise<TurnArtifactResponse | null> {
+  const headers = await authedHeaders();
+  if (!headers) return null;
+  const r = await fetch(
+    `${API_BASE}/conversations/${conversationId}/turns/${turnIndex}/artifact`,
+    { headers },
+  );
+  if (!r.ok) return null;
+  return (await r.json()) as TurnArtifactResponse;
 }
 
 /**
@@ -108,11 +158,20 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 export function serverConversationToSession(
   conv: ServerConversation,
   summary: ServerConversationSummary,
+  artifactByTurn: Record<number, TurnArtifactResponse | null> = {},
 ): ChatSession {
   const messages: SessionMessage[] = [];
-  for (const turn of conv.turns) {
+  for (const [turnIndex, turn] of conv.turns.entries()) {
     messages.push({ role: "user", content: turn.user_message.content });
-    messages.push({ role: "assistant", content: turn.answer.content });
+    const artifact = artifactByTurn[turnIndex];
+    const assistant: SessionMessage = {
+      role: "assistant",
+      content: turn.answer.content,
+    };
+    if (artifact?.artifact) {
+      assistant.meta = artifactToSyncMeta(artifact, turn.answer.content);
+    }
+    messages.push(assistant);
   }
   const ts = Date.parse(summary.last_turn_at) || Date.now();
   return {
@@ -122,6 +181,33 @@ export function serverConversationToSession(
     messages,
     createdAt: Date.parse(conv.created_at) || ts,
     updatedAt: ts,
+  };
+}
+
+function artifactToSyncMeta(
+  raw: TurnArtifactResponse,
+  answer: string,
+): ChatSyncResponse {
+  const sourceDocuments = raw.artifact.documents.map((d) => d.preview);
+  const toolCalls = raw.artifact.tool_names.map((name) => ({ tool_name: name }));
+  return {
+    answer,
+    source_documents: sourceDocuments,
+    elapsed_seconds: 0,
+    metadata: {
+      pattern: raw.artifact.pattern,
+      selected_strategy: raw.artifact.selected_strategy,
+      standalone_question: raw.artifact.standalone_question,
+      source_pages: raw.artifact.documents.map((d) => d.page),
+      source_pages_label: raw.artifact.citations.map((c) => c.page_label),
+      graph_summary: raw.artifact.graph,
+      tool_call_count: raw.artifact.tool_call_count,
+      tool_calls: toolCalls,
+      stale_reasons: raw.stale_reasons,
+      is_stale: raw.freshness.is_stale,
+      requery_hint: raw.requery_hint,
+      artifact_notice: raw.notice,
+    },
   };
 }
 
@@ -135,7 +221,15 @@ export async function fetchAllConversations(): Promise<ChatSession[]> {
   const sessions: ChatSession[] = [];
   for (const summary of list) {
     const conv = await fetchConversation(summary.id);
-    if (conv) sessions.push(serverConversationToSession(conv, summary));
+    if (!conv) continue;
+    const artifactByTurn: Record<number, TurnArtifactResponse | null> = {};
+    const tasks = conv.turns.map((turn, idx) => {
+      if (!turn.retrieval_result_ref) return Promise.resolve<[number, TurnArtifactResponse | null]>([idx, null]);
+      return fetchTurnArtifact(conv.id, idx).then((artifact) => [idx, artifact] as const);
+    });
+    const results = await Promise.all(tasks);
+    for (const [idx, artifact] of results) artifactByTurn[idx] = artifact;
+    sessions.push(serverConversationToSession(conv, summary, artifactByTurn));
   }
   return sessions;
 }

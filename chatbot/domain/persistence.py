@@ -18,6 +18,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict
 
 from chatbot.domain.conversation import Conversation
+from chatbot.domain.turn_artifact import TurnArtifact
 
 
 class ConversationSummary(BaseModel):
@@ -75,4 +76,30 @@ class UserIdentifier(Protocol):
 
     def current_user_id(self, request: Any) -> str | None:
         """JWT 검증 실패 또는 익명 모드 시 None. 본인 인증 통과 시 user uuid 문자열."""
+        ...
+
+
+@runtime_checkable
+class TurnArtifactStore(Protocol):
+    """턴 단위 retrieval 아티팩트 저장소.
+
+    대화 본문(Conversation)과 분리 저장. reopen 시 근거 패널 복원에 사용한다.
+    """
+
+    def save_if_absent(self, artifact: TurnArtifact, *, user_id: str) -> None:
+        """이미 있으면 덮어쓰지 않는다 (immutable snapshot)."""
+        ...
+
+    def load_by_turn(
+        self,
+        conversation_id: str,
+        turn_index: int,
+        *,
+        user_id: str,
+    ) -> TurnArtifact | None:
+        """없거나 다른 사용자 소유면 None."""
+        ...
+
+    def load_by_ref(self, retrieval_result_ref: str, *, user_id: str) -> TurnArtifact | None:
+        """retrieval_result_ref 기반 조회."""
         ...

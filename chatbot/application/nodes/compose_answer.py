@@ -13,6 +13,7 @@ from chatbot.application._protocols import AnswerComposer
 from chatbot.application.nodes._helpers import history_messages
 from chatbot.domain.conversation import Message, Turn
 from chatbot.domain.state import ConversationState
+from chatbot.domain.turn_artifact import make_retrieval_result_ref
 
 
 def compose_answer(
@@ -37,12 +38,18 @@ def compose_answer(
 def _build_turn(state: ConversationState, answer: Message) -> Turn:
     """state + 합성된 answer → Turn freeze."""
     elapsed_ms = max(0, int(time() * 1000) - state.started_at_ms)
+    turn_index = len(state.conversation.turns)
+    retrieval_ref = (
+        make_retrieval_result_ref(state.conversation.id, turn_index)
+        if state.pending_retrieval is not None
+        else None
+    )
     return Turn(
         user_message=state.pending_user_message,
         intent=state.pending_intent,  # type: ignore[arg-type]
         standalone_question=state.pending_standalone,
         selected_strategy=state.pending_strategy,
-        retrieval_result_ref=None,
+        retrieval_result_ref=retrieval_ref,
         answer=answer,
         trace_id=state.trace_id,
         elapsed_ms=elapsed_ms,

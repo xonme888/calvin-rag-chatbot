@@ -4,5 +4,8 @@
 """
 
 from chatbot.infrastructure.persistence.supabase_store import SupabaseConversationStore
+from chatbot.infrastructure.persistence.turn_artifact_store import (
+    SupabaseTurnArtifactStore,
+)
 
-__all__ = ["SupabaseConversationStore"]
+__all__ = ["SupabaseConversationStore", "SupabaseTurnArtifactStore"]
