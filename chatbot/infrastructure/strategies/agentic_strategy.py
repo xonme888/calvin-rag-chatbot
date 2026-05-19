@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ from chatbot.infrastructure.parsers import (
 )
 from chatbot.infrastructure.strategies._config import AgenticStrategyConfig
 from chatbot.infrastructure.tools import domain_tool_to_basetool
+from infra.llm_cache import cache_delta, cache_snapshot
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -78,6 +80,7 @@ class AgenticStrategy:
         from langchain_core.messages import HumanMessage
 
         start = time.perf_counter()
+        cache_start = cache_snapshot()
         input_state: dict[str, Any] = {
             "messages": [HumanMessage(content=request.standalone_question)]
         }
@@ -86,13 +89,20 @@ class AgenticStrategy:
         final_state: dict[str, Any] = self._agent.invoke(input_state, config=run_config)
         parsed = parse_messages(final_state.get("messages", []))
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return self._build_result(parsed=parsed, elapsed_ms=elapsed_ms)
+        return self._build_result(
+            parsed=parsed,
+            elapsed_ms=elapsed_ms,
+            question=request.standalone_question,
+            cache_meta=cache_delta(cache_start),
+        )
 
     def _build_result(
         self,
         *,
         parsed: AgentParseResult,
         elapsed_ms: int,
+        question: str,
+        cache_meta: dict[str, Any],
     ) -> RetrievalResult:
         """AgentParseResult → RetrievalResult.
 
@@ -103,17 +113,23 @@ class AgenticStrategy:
         documents = self._tool_outputs_to_refs(parsed.source_documents)
         tool_calls = parsed_to_tool_calls(parsed, elapsed_ms_per_call=0)
         citations: tuple[Citation, ...] = ()
+        from rag_core.followup import generate_followups
+
+        followups = generate_followups(question, parsed.final_answer, self._llm)
+        metadata: dict[str, str] = {
+            "pattern": self._config.pattern_name,
+            "elapsed_ms": str(elapsed_ms),
+            "answer": parsed.final_answer,
+            "tool_call_count": str(len(parsed.tool_calls)),
+            "model": str(getattr(self._llm, "model_name", "unknown")),
+            "suggested_followups": json.dumps(followups, ensure_ascii=False),
+        }
+        metadata.update({k: str(v) for k, v in cache_meta.items()})
         return RetrievalResult(
             documents=tuple(documents),
             citations=citations,
             tool_calls=tool_calls,
-            metadata={
-                "pattern": self._config.pattern_name,
-                "elapsed_ms": str(elapsed_ms),
-                "answer": parsed.final_answer,
-                "tool_call_count": str(len(parsed.tool_calls)),
-                "model": getattr(self._llm, "model_name", "unknown"),
-            },
+            metadata=metadata,
         )
 
     def _tool_outputs_to_refs(self, outputs: list[str]) -> list[DocumentRef]:

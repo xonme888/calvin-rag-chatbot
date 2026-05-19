@@ -31,6 +31,7 @@ class LoopOutcome:
     is_grounded: bool
     grade_reason: str
     retries: int
+    rewritten_question: str | None = None
 
 
 @dataclass
@@ -51,6 +52,7 @@ class SelfRAGLoop:
     ) -> LoopOutcome:
         """1 사이클: grade → (실패 + retries 남음) ? rewrite + retrieve + generate : 종료."""
         retries = 0
+        rewritten_question: str | None = None
         while True:
             grade = self.grade.run(GradeInput(answer=answer, documents=documents))
             if grade["is_grounded"] or retries >= self.max_retries:
@@ -60,6 +62,7 @@ class SelfRAGLoop:
                     is_grounded=grade["is_grounded"],
                     grade_reason=grade["reason"],
                     retries=retries,
+                    rewritten_question=rewritten_question,
                 )
             retries += 1
             question, documents, answer = self._iterate(
@@ -67,6 +70,7 @@ class SelfRAGLoop:
                 grade_reason=grade["reason"],
                 request=request,
             )
+            rewritten_question = question
 
     def _iterate(
         self,

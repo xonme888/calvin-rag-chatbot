@@ -24,6 +24,7 @@ from chatbot.infrastructure.stages import (
 )
 from chatbot.infrastructure.strategies._config import HybridStrategyConfig
 from chatbot.infrastructure.strategies._self_rag_loop import LoopOutcome, SelfRAGLoop
+from infra.llm_cache import cache_delta, cache_snapshot
 
 FollowupFn: TypeAlias = Callable[[str, str], list[str]]
 
@@ -77,10 +78,11 @@ class HybridStrategy:
 
     def run(self, request: RetrievalRequest) -> RetrievalResult:
         start = time.perf_counter()
+        cache_start = cache_snapshot()
         self._apply_dense_weight_override(request)
         request = request.model_copy(update={"top_k": self._config.top_k})
 
-        documents = self._retrieve.run(request)
+        documents, debug_meta = self._retrieve_with_debug(request)
         documents = self._maybe_rerank(query=request.standalone_question, documents=documents)
 
         gen_out = self._generate.run(
@@ -108,6 +110,8 @@ class HybridStrategy:
             confidence=gen_out["confidence"],
             outcome=outcome,
             followups=followups,
+            debug_meta=debug_meta,
+            cache_meta=cache_delta(cache_start),
             elapsed_ms=int((time.perf_counter() - start) * 1000),
         )
 
@@ -120,23 +124,31 @@ class HybridStrategy:
         confidence: float,
         outcome: LoopOutcome,
         followups: list[str],
+        debug_meta: dict[str, str],
+        cache_meta: dict[str, str | int | float | bool],
         elapsed_ms: int,
     ) -> RetrievalResult:
         citations = refs_to_citations(documents, cited_pages_one_indexed=cited_pages)
+        metadata = {
+            "pattern": self._config.pattern_name,
+            "elapsed_ms": str(elapsed_ms),
+            "confidence": f"{confidence:.4f}",
+            "cited_pages": json.dumps(cited_pages),
+            "is_grounded": str(outcome.is_grounded),
+            "grade_reason": outcome.grade_reason,
+            "self_rag_retries": str(outcome.retries),
+            "self_rag_attempts": str(outcome.retries + 1),
+            "answer": answer,
+            "suggested_followups": json.dumps(followups, ensure_ascii=False),
+            **debug_meta,
+        }
+        if outcome.rewritten_question:
+            metadata["rewritten_question"] = outcome.rewritten_question
+        metadata.update({k: str(v) for k, v in cache_meta.items()})
         return RetrievalResult(
             documents=tuple(documents),
             citations=tuple(citations),
-            metadata={
-                "pattern": self._config.pattern_name,
-                "elapsed_ms": str(elapsed_ms),
-                "confidence": f"{confidence:.4f}",
-                "cited_pages": json.dumps(cited_pages),
-                "is_grounded": str(outcome.is_grounded),
-                "grade_reason": outcome.grade_reason,
-                "self_rag_retries": str(outcome.retries),
-                "answer": answer,
-                "suggested_followups": json.dumps(followups, ensure_ascii=False),
-            },
+            metadata=metadata,
         )
 
     def _maybe_rerank(self, *, query: str, documents: list[DocumentRef]) -> list[DocumentRef]:
@@ -193,3 +205,27 @@ class HybridStrategy:
             return
         if 0.0 <= value <= 1.0:
             self.set_dense_weight(value)
+
+    def _retrieve_with_debug(
+        self,
+        request: RetrievalRequest,
+    ) -> tuple[list[DocumentRef], dict[str, str]]:
+        """검색 결과와 v1 호환 디버그 메타를 함께 반환."""
+        splitter = getattr(self._retriever, "retrieve_split", None)
+        if callable(splitter):
+            bm25_results, dense_results, fused = splitter(request)
+            top_docs = fused[: request.top_k]
+            rrf_scores = [round(float(d.score or 0.0), 4) for d in top_docs[:5]]
+            return top_docs, {
+                "bm25_count": str(len(bm25_results)),
+                "dense_count": str(len(dense_results)),
+                "rrf_top_scores": json.dumps(rrf_scores),
+                "dense_weight": f"{getattr(self._retriever, 'dense_weight', 0.5):.4f}",
+            }
+        docs = self._retrieve.run(request)
+        return docs, {
+            "bm25_count": "",
+            "dense_count": "",
+            "rrf_top_scores": json.dumps([]),
+            "dense_weight": f"{getattr(self._retriever, 'dense_weight', 0.5):.4f}",
+        }

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING
 
@@ -40,6 +41,7 @@ from chatbot.infrastructure.stages import (
     RetrieveStage,
 )
 from chatbot.infrastructure.strategies._config import KGStrategyConfig
+from infra.llm_cache import cache_delta, cache_snapshot
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -85,6 +87,7 @@ class KGStrategy:
         from langchain_core.prompts import ChatPromptTemplate
 
         start = time.perf_counter()
+        cache_start = cache_snapshot()
         request = request.model_copy(update={"top_k": self._config.top_k})
 
         extraction = self._extract.run(request.standalone_question)
@@ -111,6 +114,8 @@ class KGStrategy:
             answer=answer,
             extraction=extraction,
             subgraph=subgraph,
+            question=request.standalone_question,
+            cache_meta=cache_delta(cache_start),
             elapsed_ms=elapsed_ms,
         )
 
@@ -128,26 +133,34 @@ class KGStrategy:
         answer: str,
         extraction: ExtractEntitiesResult,
         subgraph: Subgraph,
+        question: str,
+        cache_meta: dict[str, object],
         elapsed_ms: int,
     ) -> RetrievalResult:
         cited_pages = extract_cited_pages(answer)
         citations: tuple[Citation, ...] = tuple(
             refs_to_citations(documents, cited_pages_one_indexed=cited_pages)
         )
+        from rag_core.followup import generate_followups
+
+        followups = generate_followups(question, answer, self._llm)
+        metadata: dict[str, str] = {
+            "pattern": self._config.pattern_name,
+            "elapsed_ms": str(elapsed_ms),
+            "answer": answer,
+            "entities": ",".join(extraction["entities"]),
+            "intent": extraction["intent"],
+            "graph_node_count": str(len(subgraph.nodes)),
+            "graph_edge_count": str(len(subgraph.edges)),
+            "vector_count": str(len(documents)),
+            "suggested_followups": json.dumps(followups, ensure_ascii=False),
+        }
+        metadata.update({k: str(v) for k, v in cache_meta.items()})
         return RetrievalResult(
             documents=tuple(documents),
             citations=citations,
             subgraph=subgraph,
-            metadata={
-                "pattern": self._config.pattern_name,
-                "elapsed_ms": str(elapsed_ms),
-                "answer": answer,
-                "entities": ",".join(extraction["entities"]),
-                "intent": extraction["intent"],
-                "graph_node_count": str(len(subgraph.nodes)),
-                "graph_edge_count": str(len(subgraph.edges)),
-                "vector_count": str(len(documents)),
-            },
+            metadata=metadata,
         )
 
 

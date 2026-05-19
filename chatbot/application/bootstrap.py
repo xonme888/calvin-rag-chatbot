@@ -169,8 +169,16 @@ def _build_hybrid_strategy(*, hybrid_rag: HybridRAG, llm: BaseChatModel) -> Hybr
         retriever=text_retriever,
         retrieve_stage=retrieve_stage,
         generate_stage=generate_stage,
+        followup_fn=lambda question, answer: _generate_followups(question, answer, llm),
         config=HybridStrategyConfig(top_k=hybrid_rag.config.top_k),
     )
+
+
+def _generate_followups(question: str, answer: str, llm: BaseChatModel) -> list[str]:
+    """v1과 동일한 후속 질문 생성 로직."""
+    from rag_core.followup import generate_followups
+
+    return generate_followups(question, answer, llm)
 
 
 def _build_hybrid_retriever(hybrid_rag: HybridRAG) -> HybridRetriever:

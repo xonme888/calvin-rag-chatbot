@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,7 @@ from chatbot.infrastructure.validation import (
     AttachmentValidationError,
     AttachmentValidator,
 )
+from infra.llm_cache import cache_delta, cache_snapshot
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -73,6 +75,7 @@ class VisionStrategy:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         start = time.perf_counter()
+        cache_start = cache_snapshot()
 
         # 1. 서버측 검증 — 실패 시 user-friendly 답변으로 변환
         try:
@@ -102,6 +105,7 @@ class VisionStrategy:
             answer=answer if isinstance(answer, str) else str(answer),
             documents=documents,
             attachment_count=len(request.attachments),
+            cache_meta=cache_delta(cache_start),
             elapsed_ms=int((time.perf_counter() - start) * 1000),
         )
 
@@ -120,6 +124,7 @@ class VisionStrategy:
         answer: str,
         documents: list[DocumentRef],
         attachment_count: int,
+        cache_meta: dict[str, object],
         elapsed_ms: int,
     ) -> RetrievalResult:
         from chatbot.infrastructure.parsers import extract_cited_pages
@@ -130,16 +135,19 @@ class VisionStrategy:
             if documents
             else ()
         )
+        metadata: dict[str, str] = {
+            "pattern": self._config.pattern_name,
+            "elapsed_ms": str(elapsed_ms),
+            "answer": answer,
+            "attachment_count": str(attachment_count),
+            "with_retrieval": "true" if documents else "false",
+            "suggested_followups": json.dumps([], ensure_ascii=False),
+        }
+        metadata.update({k: str(v) for k, v in cache_meta.items()})
         return RetrievalResult(
             documents=tuple(documents),
             citations=citations,
-            metadata={
-                "pattern": self._config.pattern_name,
-                "elapsed_ms": str(elapsed_ms),
-                "answer": answer,
-                "attachment_count": str(attachment_count),
-                "with_retrieval": "true" if documents else "false",
-            },
+            metadata=metadata,
         )
 
     def _error_result(self, *, reason: str, start: float) -> RetrievalResult:

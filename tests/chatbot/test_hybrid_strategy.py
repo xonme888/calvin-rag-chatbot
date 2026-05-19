@@ -65,6 +65,7 @@ def test_hybrid_정상_경로_envelope():
     assert _json.loads(result.metadata["cited_pages"]) == [1, 5]
     assert result.metadata["is_grounded"] == "True"
     assert result.metadata["self_rag_retries"] == "0"
+    assert result.metadata["self_rag_attempts"] == "1"
     assert "elapsed_ms" in result.metadata
     # citations 가 cited_pages 만 (1, 5) 노출
     labels = [c.page_label for c in result.citations]
@@ -108,6 +109,8 @@ def test_self_rag_재시도_1회_후_성공():
     result = strategy.run(RetrievalRequest(standalone_question="원본"))
     assert result.metadata["is_grounded"] == "True"
     assert result.metadata["self_rag_retries"] == "1"
+    assert result.metadata["self_rag_attempts"] == "2"
+    assert result.metadata["rewritten_question"] == "재작성:원본"
     assert "answer2" in result.metadata["answer"]
 
 

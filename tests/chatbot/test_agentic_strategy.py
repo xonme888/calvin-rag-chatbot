@@ -90,11 +90,12 @@ def test_agentic_build_result_envelope():
         tool_calls=[{"tool": "search_documents", "args": {"query": "예정론"}}],
         source_documents=["[page 1] 본문"],
     )
-    result = s._build_result(parsed=parsed, elapsed_ms=42)
+    result = s._build_result(parsed=parsed, elapsed_ms=42, question="예정론?", cache_meta={})
     assert result.metadata["pattern"] == "Agentic RAG"
     assert result.metadata["answer"] == "예정론은 [p.1]"
     assert result.metadata["tool_call_count"] == "1"
     assert result.metadata["elapsed_ms"] == "42"
+    assert "suggested_followups" in result.metadata
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].tool_name == "search_documents"
     assert len(result.documents) == 1
@@ -105,7 +106,7 @@ def test_agentic_build_result_envelope():
 def test_agentic_build_result_도구호출_0개():
     s = _make_strategy()
     parsed = AgentParseResult(final_answer="직접 답변", tool_calls=[], source_documents=[])
-    result = s._build_result(parsed=parsed, elapsed_ms=10)
+    result = s._build_result(parsed=parsed, elapsed_ms=10, question="Q", cache_meta={})
     assert result.tool_calls == ()
     assert result.documents == ()
     assert result.metadata["tool_call_count"] == "0"

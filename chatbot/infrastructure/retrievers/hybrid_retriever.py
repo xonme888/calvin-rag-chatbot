@@ -49,10 +49,22 @@ class HybridRetriever:
         self._dense_weight = value
 
     def retrieve(self, request: RetrievalRequest) -> list[DocumentRef]:
+        _, _, fused = self.retrieve_split(request)
+        return fused[: request.top_k]
+
+    def retrieve_split(
+        self,
+        request: RetrievalRequest,
+    ) -> tuple[list[DocumentRef], list[DocumentRef], list[DocumentRef]]:
+        """검색 결과를 (bm25, dense, fused) 3종으로 반환.
+
+        v1의 ``retrieve_split``와 동일한 디버그 메타(bm25_count, dense_count, rrf_top_scores)
+        복원을 위해 strategy 계층에서 사용한다.
+        """
         bm25_results = self._bm25.retrieve(request)
         dense_results = self._dense.retrieve(request)
         fused = self._reciprocal_rank_fusion(bm25_results, dense_results)
-        return fused[: request.top_k]
+        return bm25_results, dense_results, fused
 
     def _reciprocal_rank_fusion(
         self,

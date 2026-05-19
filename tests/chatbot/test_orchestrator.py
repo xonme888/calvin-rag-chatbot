@@ -43,7 +43,14 @@ class _Rewriter:
 
 
 class _Router:
-    def choose(self, *, candidates, standalone_question, last_turn):  # type: ignore[no-untyped-def]
+    def choose(
+        self,
+        *,
+        candidates,
+        standalone_question,
+        last_turn,
+        previous_mode=None,
+    ):  # type: ignore[no-untyped-def]
         # 라벨 기반 수동 매칭 — 다중 후보 중 standalone_question 키워드로 결정
         kw_map = {"관계": "kg", "그래프": "kg", "이미지": "vision"}
         for kw, name in kw_map.items():
