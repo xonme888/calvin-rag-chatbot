@@ -132,6 +132,17 @@ class UsageTracker(BaseCallbackHandler):
         """ChatModel 시작 시점 — on_llm_end 와 짝. 별도 처리 X."""
         pass
 
+    def record_text_interaction(self, *, input_text: str, output_text: str) -> tuple[int, int]:
+        """텍스트 입출력에서 대략 토큰을 추정해 SessionStats 에 기록.
+
+        모든 LLM 호출 경로에 callback 주입이 어려운 라우트/통합 단계에서 사용하는
+        최소 안전망이다. 한국어/영어 혼합 기준으로 ``문자수 / 2`` 근사를 사용한다.
+        """
+        input_tokens = rough_token_count(input_text)
+        output_tokens = rough_token_count(output_text)
+        self.stats.record(self.mode, input_tokens, output_tokens, self.model)
+        return input_tokens, output_tokens
+
     @staticmethod
     def _extract_token_usage(response: Any) -> tuple[int, int] | None:
         """LangChain LLMResult 에서 (input_tokens, output_tokens) 추출.
@@ -173,3 +184,11 @@ def estimate_cost_krw(model: str, input_tokens: int, output_tokens: int) -> floa
     in_rate, out_rate = MODEL_PRICING_USD.get(model, (0.0, 0.0))
     cost_usd = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000
     return cost_usd * USD_TO_KRW
+
+
+def rough_token_count(text: str) -> int:
+    """외부 tokenizer 없이 문자열 길이 기반으로 토큰 수를 대략 추정."""
+    if not text:
+        return 0
+    # GPT 계열에서 한국어는 대체로 영어보다 토큰 밀도가 높아 보수적으로 2자로 1토큰 추정.
+    return max(1, len(text) // 2)

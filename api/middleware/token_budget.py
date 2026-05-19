@@ -13,8 +13,8 @@ import os
 
 from fastapi import HTTPException
 
-from infra.budget import budget_key, check_budget
-from infra.usage_tracker import SessionStats
+from infra.budget import budget_key, check_budget, record_usage
+from infra.usage_tracker import SessionStats, estimate_cost_krw
 
 
 def _global_cap() -> int:
@@ -57,3 +57,20 @@ def check_user_budget(user_id: str | None, ip: str, role: str = "free") -> None:
                 "한도 상향은 plan 업그레이드 또는 관리자 문의."
             ),
         )
+
+
+def record_user_budget_usage(
+    *,
+    user_id: str | None,
+    ip: str,
+    tokens_in: int,
+    tokens_out: int,
+    model: str = "gpt-4o-mini",
+) -> None:
+    """사용자/IP 예산 사용량 누적 기록.
+
+    check_user_budget() 는 *사전 차단* 만 수행하므로, 실제 호출 후에는 별도 누적이 필요하다.
+    """
+    key = budget_key(user_id, ip)
+    cost_krw = estimate_cost_krw(model, input_tokens=tokens_in, output_tokens=tokens_out)
+    record_usage(key, tokens_in=tokens_in, tokens_out=tokens_out, cost_krw=cost_krw)
