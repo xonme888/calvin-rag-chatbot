@@ -106,5 +106,7 @@ def _clip_history_for_generate(history: list[Message]) -> list[Message]:
         out.append(msg)
         chars = next_chars
     return list(reversed(out))
+
+
 _MAX_GENERATE_HISTORY_MESSAGES = max(2, int(os.getenv("CHAT_GENERATE_HISTORY_MAX_MESSAGES", "10")))
 _MAX_GENERATE_HISTORY_CHARS = max(500, int(os.getenv("CHAT_GENERATE_HISTORY_MAX_CHARS", "3000")))

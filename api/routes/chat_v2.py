@@ -373,7 +373,9 @@ def _apply_output_guard(response: ChatSyncResponse) -> ChatSyncResponse:
 
     metadata["guard_action"] = "output_blocked"
     metadata["guard_reason"] = reason
-    return response.model_copy(update={"answer": _SAFE_OUTPUT_BLOCKED_MESSAGE, "metadata": metadata})
+    return response.model_copy(
+        update={"answer": _SAFE_OUTPUT_BLOCKED_MESSAGE, "metadata": metadata}
+    )
 
 
 def _record_usage_and_budget(

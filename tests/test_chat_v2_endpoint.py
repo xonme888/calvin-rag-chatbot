@@ -312,7 +312,9 @@ def test_chat_v2_output_guard_blocked_message(_reset_state) -> None:  # type: ig
         strategy="hybrid",
     )
     _install_orchestrator(_reset_state, fake)
-    _reset_state.setattr(chat_v2_module, "check_output_guard", lambda _text: (False, "policy", None))
+    _reset_state.setattr(
+        chat_v2_module, "check_output_guard", lambda _text: (False, "policy", None)
+    )
     client = TestClient(app)
     resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})
     assert resp.status_code == 200
@@ -323,7 +325,9 @@ def test_chat_v2_output_guard_blocked_message(_reset_state) -> None:  # type: ig
 
 def test_chat_v2_input_guard_block_returns_400(_reset_state) -> None:  # type: ignore[no-untyped-def]
     """입력 가드 차단 시 400."""
-    _reset_state.setattr(chat_v2_module, "check_input_guard", lambda _text: (False, "blocked", None))
+    _reset_state.setattr(
+        chat_v2_module, "check_input_guard", lambda _text: (False, "blocked", None)
+    )
     client = TestClient(app)
     resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})
     assert resp.status_code == 400
@@ -335,7 +339,9 @@ def test_chat_v2_user_budget_exceeded_returns_429(_reset_state) -> None:  # type
     _reset_state.setattr(
         chat_v2_module,
         "check_user_budget",
-        lambda **_kw: (_ for _ in ()).throw(HTTPException(status_code=429, detail="budget exceeded")),
+        lambda **_kw: (_ for _ in ()).throw(
+            HTTPException(status_code=429, detail="budget exceeded")
+        ),
     )
     client = TestClient(app)
     resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})

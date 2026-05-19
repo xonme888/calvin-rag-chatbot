@@ -67,7 +67,8 @@ def _bounded_history(messages: list[Message]) -> list[Message]:
 
     # 초과된 앞부분은 간단 요약 메시지로 압축해 컨텍스트 단절을 완화한다.
     dropped_preview = " / ".join(
-        f"{'U' if m.role == 'user' else 'A'}:{m.content[:40]}" for m in messages[: min(3, dropped_count)]
+        f"{'U' if m.role == 'user' else 'A'}:{m.content[:40]}"
+        for m in messages[: min(3, dropped_count)]
     )
     summary = Message(
         role="assistant",

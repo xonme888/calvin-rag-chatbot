@@ -19,9 +19,7 @@ from chatbot.domain.strategy import RetrievalStrategy
 _KG_KEYWORDS: frozenset[str] = frozenset(
     {"관계", "영향", "사이", "어떤 인물", "누가", "그래프", "연결", "네트워크", "계보"}
 )
-_AGENTIC_KEYWORDS: frozenset[str] = frozenset(
-    {"검색", "찾아", "조회"}
-)
+_AGENTIC_KEYWORDS: frozenset[str] = frozenset({"검색", "찾아", "조회"})
 _RECENCY_KEYWORDS: frozenset[str] = frozenset({"최신", "오늘", "최근", "현재"})
 
 
