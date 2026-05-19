@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
@@ -313,12 +314,11 @@ async def _stream_events(
         routed_mode=str(response.metadata.get("selected_strategy") or "orchestrator"),
     )
 
-    chunk_size = 16
-    for i in range(0, len(response.answer), chunk_size):
+    for delta in _token_deltas(response.answer):
         yield {
             "event": "message",
             "data": json.dumps(
-                {"type": "text-delta", "delta": response.answer[i : i + chunk_size]},
+                {"type": "text-delta", "delta": delta},
                 ensure_ascii=False,
             ),
         }
@@ -398,3 +398,14 @@ def _record_usage_and_budget(
         tokens_out=tokens_out,
         model=model_name,
     )
+
+
+def _token_deltas(answer: str) -> list[str]:
+    """답변 문자열을 토큰 단위(delta)로 분할.
+
+    LLM native streaming이 없는 경로에서도 UI는 token-like delta 흐름을 받는다.
+    """
+    if not answer:
+        return [""]
+    chunks = re.findall(r"\S+\s*|\n+", answer)
+    return chunks if chunks else [answer]

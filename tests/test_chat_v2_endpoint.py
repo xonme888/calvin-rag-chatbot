@@ -351,6 +351,14 @@ def test_chat_v2_stream_라우트_등록() -> None:
     assert "/chat/v2/stream" in paths
 
 
+def test_stream_token_deltas_분할_동작() -> None:
+    from api.routes.chat_v2 import _token_deltas
+
+    parts = _token_deltas("칼빈 신학 입니다.")
+    assert "".join(parts) == "칼빈 신학 입니다."
+    assert len(parts) >= 2
+
+
 # ============================================================
 # chat_history → Conversation.turns 복원 (브라우저 보유 history 패턴)
 # ============================================================

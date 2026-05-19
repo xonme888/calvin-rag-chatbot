@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from chatbot.application.nodes._helpers import history_messages as _history_messages
 from chatbot.application.nodes import (
     classify_intent,
     compose_answer,
@@ -305,3 +306,10 @@ def test_compose_누적_turn():
     state = _state(turns=(_turn(),)).model_copy(update={"pending_intent": Intent.NEW_QUESTION})
     out = compose_answer(state, answerer=_FakeAnswerer())
     assert len(out.conversation.turns) == 2
+
+
+def test_history_messages_상한_적용():
+    turns = tuple(_turn(q=f"q{i}", a=f"a{i}") for i in range(20))
+    state = _state(turns=turns)
+    msgs = _history_messages(state)
+    assert len(msgs) <= 13  # summary 1 + 최근 12 메시지
