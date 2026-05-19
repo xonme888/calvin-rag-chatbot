@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { del as idbDel, get as idbGet, set as idbSet } from "idb-keyval";
 
 import type { ChatSession } from "@/lib/sessionStore";
-import { migrateAnonymousSessions } from "@/lib/serverSessions";
+import {
+  fetchConversationList,
+  migrateAnonymousSessions,
+} from "@/lib/serverSessions";
 import { getCurrentUser } from "@/lib/supabase";
 
 const KEY_SESSIONS = "calvin-chat:sessions";
@@ -51,8 +54,17 @@ export function SessionMigrationPrompt(): React.ReactElement | null {
       );
       if (cancelled) return;
       if (meaningful.length === 0) return;
+
+      // 과거 버전에서 로그인 세션이 IndexedDB 로 미러링된 경우(오탐) 제외.
+      // 서버에 이미 존재하는 conversation id 는 익명 마이그레이션 대상이 아니다.
+      const serverList = await fetchConversationList(200);
+      if (cancelled) return;
+      const serverIds = new Set(serverList.map((c) => c.id));
+      const anonymousOnly = meaningful.filter((s) => !serverIds.has(s.id));
+      if (anonymousOnly.length === 0) return;
+
       setUserId(user.id);
-      setAnonSessions(meaningful);
+      setAnonSessions(anonymousOnly);
       setPhase("ready");
     })();
     return () => {

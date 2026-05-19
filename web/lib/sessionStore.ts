@@ -109,6 +109,7 @@ export function useSessions(): UseSessionsResult {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [ready, setReady] = useState(false);
 
   // mount 후 로딩:
@@ -123,6 +124,7 @@ export function useSessions(): UseSessionsResult {
     async function loadSessions(): Promise<void> {
       const user = await getCurrentUser();
       if (cancelled) return;
+      setIsAuthenticated(Boolean(user));
 
       let loaded: ChatSession[] | undefined;
       let storedActive: string | undefined = await idbGet(KEY_ACTIVE);
@@ -182,14 +184,15 @@ export function useSessions(): UseSessionsResult {
 
   // sessions 변경 시 영속화 (비동기, fire-and-forget)
   useEffect(() => {
-    if (!ready || typeof window === "undefined") return;
+    if (!ready || isAuthenticated || typeof window === "undefined") return;
     void idbSet(KEY_SESSIONS, sessions);
-  }, [sessions, ready]);
+  }, [sessions, ready, isAuthenticated]);
 
   useEffect(() => {
-    if (!ready || !activeId || typeof window === "undefined") return;
+    if (!ready || isAuthenticated || !activeId || typeof window === "undefined")
+      return;
     void idbSet(KEY_ACTIVE, activeId);
-  }, [activeId, ready]);
+  }, [activeId, ready, isAuthenticated]);
 
   const active = sessions.find((s) => s.id === activeId) ?? null;
 
