@@ -167,6 +167,8 @@ def _build_metadata(
         "intent": last_turn.intent.value if last_turn else None,
         "standalone_question": last_turn.standalone_question if last_turn else None,
         "selected_strategy": last_turn.selected_strategy if last_turn else None,
+        "routed_mode": last_turn.selected_strategy if last_turn else None,
+        "auto_routed": bool(last_turn and last_turn.selected_strategy),
         "trace_id": trace_id,
     }
     if retrieval is None:
@@ -199,6 +201,8 @@ def _build_metadata(
         {"tool_name": tc.tool_name, "arguments": dict(tc.arguments)} for tc in retrieval.tool_calls
     ]
     metadata["tool_call_count"] = len(retrieval.tool_calls)
+    if retrieval.metadata.get("mode_override"):
+        metadata["auto_routed"] = False
     for key in (
         "error_code",
         "strategy_reason",

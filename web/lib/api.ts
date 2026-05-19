@@ -76,7 +76,7 @@ export interface ChatStreamMeta {
     edges: Array<{ source: string; target: string; label?: string }>;
   } | null;
   // Agentic 모드 — 도구 호출 정보
-  tool_calls?: Array<Record<string, unknown>>;
+  tool_calls?: ToolCallWire[];
   tool_call_count?: number;
   // LLM 캐시 통계 — 답변이 캐시에서 왔는지 표시
   cache_hits?: number;
@@ -97,6 +97,14 @@ export interface ChatStreamMeta {
   standalone_question?: string | null;
   selected_strategy?: string | null;
   trace_id?: string;
+}
+
+export interface ToolCallWire {
+  tool_name?: string;
+  arguments?: Record<string, unknown>;
+  // 하위 호환 (구 필드)
+  tool?: string;
+  args?: Record<string, unknown>;
 }
 
 export interface MatchedTerm {

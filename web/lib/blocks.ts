@@ -127,9 +127,16 @@ function extractToolCalls(msg: SessionMessage): ParsedToolCall[] {
   if (!Array.isArray(raw)) return [];
   const out: ParsedToolCall[] = [];
   for (const c of raw) {
-    const tool = (c as Record<string, unknown>).tool;
+    const rec = c as Record<string, unknown>;
+    const tool =
+      (typeof rec.tool_name === "string" ? rec.tool_name : null) ??
+      (typeof rec.tool === "string" ? rec.tool : null);
     if (typeof tool !== "string") continue;
-    const args = (c as Record<string, unknown>).args;
+    const args =
+      (rec.arguments && typeof rec.arguments === "object"
+        ? rec.arguments
+        : undefined) ??
+      (rec.args && typeof rec.args === "object" ? rec.args : undefined);
     out.push({
       tool,
       args:
