@@ -289,11 +289,20 @@ async def _stream_events(
     try:
         if callable(getattr(orchestrator, "stream", None)):
             holder: dict[str, Any] = {}
-            async for delta in _iter_graph_message_deltas(
+            async for kind, payload in _iter_graph_message_events(
                 orchestrator=orchestrator,
                 state=state,
                 holder=holder,
             ):
+                if kind == "preview_meta":
+                    yield {
+                        "event": "meta",
+                        "data": json.dumps(payload, ensure_ascii=False, default=str),
+                    }
+                    continue
+                if kind != "delta":
+                    continue
+                delta = str(payload)
                 if stream_guard_blocked:
                     continue
                 candidate = streamed_text + delta
@@ -407,13 +416,13 @@ async def _stream_events(
     yield {"event": "done", "data": "[DONE]"}
 
 
-async def _iter_graph_message_deltas(
+async def _iter_graph_message_events(
     *,
     orchestrator: Any,
     state: Any,
     holder: dict[str, Any],
 ) -> Any:
-    """LangGraph stream worker를 백그라운드 스레드로 실행하고 delta를 비동기 전달."""
+    """LangGraph stream worker를 백그라운드 스레드로 실행하고 이벤트를 비동기 전달."""
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
     holder["result"] = None
@@ -421,6 +430,7 @@ async def _iter_graph_message_deltas(
 
     def _worker() -> None:
         final_state = None
+        preview_emitted = False
         try:
             for event in orchestrator.stream(
                 state,
@@ -429,6 +439,13 @@ async def _iter_graph_message_deltas(
                 mode, payload = _split_stream_event(event)
                 if mode == "values":
                     final_state = payload
+                    if not preview_emitted:
+                        preview_meta = _build_preview_meta(payload)
+                        if preview_meta is not None:
+                            preview_emitted = True
+                            loop.call_soon_threadsafe(
+                                queue.put_nowait, ("preview_meta", preview_meta)
+                            )
                     continue
                 if mode != "messages":
                     continue
@@ -450,8 +467,7 @@ async def _iter_graph_message_deltas(
         kind, payload = await queue.get()
         if kind == "done":
             break
-        if kind == "delta":
-            yield str(payload)
+        yield kind, payload
 
 
 def _split_stream_event(event: Any) -> tuple[str, Any]:
@@ -498,6 +514,58 @@ def _chunk_to_text(chunk: Any) -> str:
                     parts.append(text)
         return "".join(parts)
     return str(content)
+
+
+def _state_get(state: Any, key: str) -> Any:
+    """dict/객체 양쪽 상태 접근."""
+    if isinstance(state, dict):
+        return state.get(key)
+    return getattr(state, key, None)
+
+
+def _build_preview_meta(state: Any) -> dict[str, Any] | None:
+    """invoke 직후 state 에서 검색 카드 선표시용 최소 메타를 만든다."""
+    retrieval = _state_get(state, "pending_retrieval")
+    if retrieval is None:
+        return None
+    if not hasattr(retrieval, "documents") or not hasattr(retrieval, "citations"):
+        return None
+
+    metadata = retrieval.metadata if isinstance(getattr(retrieval, "metadata", None), dict) else {}
+    tool_calls = [
+        {"tool_name": tc.tool_name, "arguments": dict(tc.arguments)}
+        for tc in getattr(retrieval, "tool_calls", ())
+    ]
+    return {
+        "pattern": metadata.get("pattern"),
+        "routed_mode": _state_get(state, "pending_strategy"),
+        "auto_routed": _state_get(state, "requested_mode") == "auto",
+        "cited_pages": _coerce_int_list(metadata.get("cited_pages")),
+        "source_documents": [d.content for d in retrieval.documents],
+        "source_pages": [(d.page + 1) if d.page is not None else None for d in retrieval.documents],
+        "source_pages_label": [c.page_label for c in retrieval.citations],
+        "tool_calls": tool_calls,
+        "tool_call_count": len(tool_calls),
+        "subgraph": (
+            retrieval.subgraph.model_dump() if getattr(retrieval, "subgraph", None) is not None else None
+        ),
+    }
+
+
+def _coerce_int_list(raw: Any) -> list[int]:
+    """json 문자열/리스트 형태 cited_pages 를 list[int] 로 정규화."""
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, list):
+        return [int(p) for p in raw if p is not None]
+    text = str(raw).strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return [int(p) for p in parsed if p is not None]
+    except (TypeError, ValueError):
+        pass
+    return [int(p) for p in text.split(",") if p.strip().isdigit()]
 
 
 def _client_ip(request: Request) -> str:

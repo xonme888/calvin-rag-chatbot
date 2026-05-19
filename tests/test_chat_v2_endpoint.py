@@ -89,6 +89,28 @@ class _FakeStreamingOrchestrator(_FakeOrchestrator):
         yield ("values", self.invoke(state))
 
 
+class _FakePreviewStreamingOrchestrator(_FakeOrchestrator):
+    """values(검색 결과) 이벤트를 messages 보다 먼저 내보내는 테스트 더블."""
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    def stream(self, state, stream_mode=None, **kwargs):  # type: ignore[no-untyped-def]
+        del stream_mode, kwargs
+        preview_state = state.model_copy(
+            update={
+                "pending_intent": self._intent,
+                "pending_strategy": self._strategy,
+                "pending_retrieval": self._retrieval,
+            }
+        )
+        yield ("values", preview_state)
+        yield ("messages", (self._Chunk("A"), {"langgraph_node": "compose"}))
+        yield ("messages", (self._Chunk("B"), {"langgraph_node": "compose"}))
+        yield ("values", self.invoke(state))
+
+
 def _install_orchestrator(monkeypatch, orchestrator) -> None:  # type: ignore[no-untyped-def]
     """monkeypatch 로 _orchestrator 함수를 갈아끼움 — fixture teardown 시 자동 복원."""
 
@@ -349,6 +371,34 @@ def test_chat_v2_stream_tool_call_event_emit(_reset_state) -> None:  # type: ign
     assert '"type": "tool-call"' in body or '"type":"tool-call"' in body
     assert '"tool_name": "search_documents"' in body or '"tool_name":"search_documents"' in body
     assert '"event": "meta"' in body or "event: meta" in body
+
+
+def test_chat_v2_stream_preview_meta_선송출(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """retrieve 완료 메타(meta)가 text-delta 보다 먼저 송출된다."""
+    fake = _FakePreviewStreamingOrchestrator(
+        retrieval=RetrievalResult(
+            documents=(),
+            citations=(),
+            metadata={"answer": "AB", "pattern": "Hybrid RAG"},
+        ),
+        intent=Intent.NEW_QUESTION,
+        strategy="hybrid",
+    )
+    _install_orchestrator(_reset_state, fake)
+    client = TestClient(app)
+    with client.stream(
+        "POST", "/chat/v2/stream", json={"question": "예정론?", "mode": "auto", "chat_history": []}
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+
+    meta_pos = body.find("event: meta")
+    if meta_pos == -1:
+        meta_pos = body.find('"event": "meta"')
+    delta_pos = body.find("text-delta")
+    assert meta_pos >= 0
+    assert delta_pos >= 0
+    assert meta_pos < delta_pos
 
 
 def test_chat_v2_stream_오케스트레이터_예외_error_event(_reset_state) -> None:  # type: ignore[no-untyped-def]

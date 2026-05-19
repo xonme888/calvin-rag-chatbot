@@ -157,8 +157,8 @@ export function ChatPanel({
     }));
 
     try {
-      if (startMode === "hybrid" || startMode === "auto") {
-        // auto/hybrid 는 SSE 스트리밍 시도. 백엔드 라우터가 다른 모드로
+      if (startMode === "hybrid" || startMode === "agentic" || startMode === "auto") {
+        // auto/hybrid/agentic 은 SSE 스트리밍 시도. 백엔드 라우터가 다른 모드로
         // 결정하면 sync replay 로 자연스럽게 처리됨.
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
@@ -172,7 +172,18 @@ export function ChatPanel({
           conversation_id: startedSessionId,
         })) {
           if (chunk.type === "meta") {
-            receivedMeta = chunk.meta;
+            receivedMeta = receivedMeta ? { ...receivedMeta, ...chunk.meta } : chunk.meta;
+            next = [
+              ...next.slice(0, -1),
+              {
+                role: "assistant",
+                content: text,
+                streamMeta: receivedMeta,
+                streamToolCalls: streamToolCalls.length > 0 ? streamToolCalls : undefined,
+                streaming: true,
+              },
+            ];
+            onUpdateById(startedSessionId, { messages: next });
             continue;
           }
           if (chunk.type === "tool_call") {
@@ -182,6 +193,7 @@ export function ChatPanel({
               {
                 role: "assistant",
                 content: text,
+                streamMeta: receivedMeta,
                 streamToolCalls,
                 streaming: true,
               },
@@ -195,6 +207,7 @@ export function ChatPanel({
             {
               role: "assistant",
               content: text,
+              streamMeta: receivedMeta,
               streamToolCalls: streamToolCalls.length > 0 ? streamToolCalls : undefined,
               streaming: true,
             },
