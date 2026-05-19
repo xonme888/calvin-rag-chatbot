@@ -75,8 +75,8 @@ class _FakeOrchestrator:
         )
 
 
-class _FakeStreamingOrchestrator(_FakeOrchestrator):
-    """LangGraph stream(messages+values) 형태를 흉내내는 테스트 더블."""
+class _FakeLeakyInvokeStreamingOrchestrator(_FakeOrchestrator):
+    """strategy 내부 구조화 출력이 messages 로 새는 LangGraph stream 형태."""
 
     class _Chunk:
         def __init__(self, content: str) -> None:
@@ -84,8 +84,20 @@ class _FakeStreamingOrchestrator(_FakeOrchestrator):
 
     def stream(self, state, stream_mode=None, **kwargs):  # type: ignore[no-untyped-def]
         del stream_mode, kwargs
-        yield ("messages", (self._Chunk("A"), {"langgraph_node": "invoke"}))
-        yield ("messages", (self._Chunk("B"), {"langgraph_node": "invoke"}))
+        yield (
+            "messages",
+            (
+                self._Chunk('{"answer":"본문에서 직접 찾을 수 없습니다.","cited_pages":[]}'),
+                {"langgraph_node": "invoke"},
+            ),
+        )
+        yield (
+            "messages",
+            (
+                self._Chunk('{"questions":["칼빈주의 5대 강령의 역사적 배경은 무엇인가요?"]}'),
+                {"langgraph_node": "invoke"},
+            ),
+        )
         yield ("values", self.invoke(state))
 
 
@@ -316,13 +328,13 @@ def test_chat_v2_stream_chunks_meta(_reset_state) -> None:  # type: ignore[no-un
     assert "[DONE]" in body
 
 
-def test_chat_v2_stream_실제_messages_mode_우선(_reset_state) -> None:  # type: ignore[no-untyped-def]
-    """stream(messages) 델타가 있으면 sync replay 대신 해당 델타를 사용."""
-    fake = _FakeStreamingOrchestrator(
+def test_chat_v2_stream_invoke_messages_무시하고_최종답변_replay(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """strategy 내부 구조화 출력은 사용자 delta 로 노출하지 않는다."""
+    fake = _FakeLeakyInvokeStreamingOrchestrator(
         retrieval=RetrievalResult(
             documents=(),
             citations=(),
-            metadata={"answer": "AB", "pattern": "Hybrid RAG"},
+            metadata={"answer": "최종 답변입니다.", "pattern": "Hybrid RAG"},
         ),
         intent=Intent.NEW_QUESTION,
         strategy="hybrid",
@@ -335,10 +347,9 @@ def test_chat_v2_stream_실제_messages_mode_우선(_reset_state) -> None:  # ty
         assert resp.status_code == 200
         body = resp.read().decode("utf-8")
 
-    # messages 모드에서 A/B 두 델타 emit
-    assert body.count("text-delta") >= 2
-    assert '"delta":"A"' in body or '"delta": "A"' in body
-    assert '"delta":"B"' in body or '"delta": "B"' in body
+    assert "최종 답변입니다." in body
+    assert '"questions"' not in body
+    assert '"answer"' not in body
 
 
 def test_chat_v2_stream_tool_call_event_emit(_reset_state) -> None:  # type: ignore[no-untyped-def]

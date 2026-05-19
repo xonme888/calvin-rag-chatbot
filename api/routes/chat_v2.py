@@ -488,11 +488,11 @@ def _split_message_payload(payload: Any) -> tuple[Any, dict[str, Any]]:
 
 
 def _is_user_visible_node(metadata: dict[str, Any]) -> bool:
-    """내부 분류/재작성 노드는 제외하고 사용자 답변 경로만 스트림."""
+    """내부 분류/재작성/strategy 호출은 제외하고 직접 답변 합성만 스트림."""
     node = str(metadata.get("langgraph_node") or "")
     if not node:
         return True
-    return node in {"invoke", "compose"}
+    return node == "compose"
 
 
 def _chunk_to_text(chunk: Any) -> str:
@@ -547,7 +547,9 @@ def _build_preview_meta(state: Any) -> dict[str, Any] | None:
         "tool_calls": tool_calls,
         "tool_call_count": len(tool_calls),
         "subgraph": (
-            retrieval.subgraph.model_dump() if getattr(retrieval, "subgraph", None) is not None else None
+            retrieval.subgraph.model_dump()
+            if getattr(retrieval, "subgraph", None) is not None
+            else None
         ),
     }
 
