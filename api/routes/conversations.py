@@ -197,9 +197,7 @@ class MigrationRequest(BaseModel):
 
 @router.post("/migrate")
 @limiter.limit("10/hour")
-async def migrate_anonymous_sessions(
-    request: Request, payload: MigrationRequest
-) -> dict[str, Any]:
+async def migrate_anonymous_sessions(request: Request, payload: MigrationRequest) -> dict[str, Any]:
     """IndexedDB 의 익명 ChatSession[] → Supabase 일괄 upsert.
 
     각 ChatSession 의 messages 를 user/assistant 페어로 묶어 가짜 Turn 시퀀스 복원.
@@ -236,9 +234,7 @@ async def migrate_anonymous_sessions(
                                 content=str(pending_user.get("content") or ""),
                             ),
                             intent=Intent.NEW_QUESTION,
-                            answer=Message(
-                                role="assistant", content=str(msg.get("content") or "")
-                            ),
+                            answer=Message(role="assistant", content=str(msg.get("content") or "")),
                             trace_id="migrated",
                             elapsed_ms=0,
                             started_at=now,

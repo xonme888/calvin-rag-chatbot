@@ -119,9 +119,7 @@ def test_list_미인증_401(_reset_state) -> None:  # type: ignore[no-untyped-de
 # 시나리오 2: store 미설정 (env 없음) → 503
 # ============================================================
 def test_store_미설정_503(_reset_state) -> None:  # type: ignore[no-untyped-def]
-    _reset_state.setattr(
-        conv_module, "_persistence", lambda: (None, _FakeIdentifier(user_id="u"))
-    )
+    _reset_state.setattr(conv_module, "_persistence", lambda: (None, _FakeIdentifier(user_id="u")))
     client = TestClient(app)
     resp = client.get("/conversations", headers={"Authorization": "Bearer x"})
     assert resp.status_code == 503
