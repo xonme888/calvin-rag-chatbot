@@ -3,7 +3,13 @@
 import { get as idbGet, set as idbSet } from "idb-keyval";
 import { useCallback, useEffect, useState } from "react";
 
-import type { Attachment, ChatStreamMeta, ChatSyncResponse, Mode } from "./api";
+import type {
+  Attachment,
+  ChatStreamMeta,
+  ChatSyncResponse,
+  Mode,
+  ToolCallWire,
+} from "./api";
 import {
   deleteConversation as serverDeleteConversation,
   fetchAllConversations,
@@ -29,6 +35,8 @@ export interface SessionMessage {
   content: string;
   meta?: ChatSyncResponse;
   streamMeta?: ChatStreamMeta;
+  /** 스트리밍 중 수신한 도구 호출(trace) 임시 버퍼. */
+  streamToolCalls?: ToolCallWire[];
   streaming?: boolean;
   attachments?: SessionAttachment[]; // 향후 MCP/도구 결과
   /** 사용자 첨부 이미지 (vision 모드) — IndexedDB 에 base64 보관. */

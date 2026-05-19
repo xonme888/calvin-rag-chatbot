@@ -120,6 +120,7 @@ function extractMatchedTerms(msg: SessionMessage): MatchedTerm[] {
 
 function extractToolCalls(msg: SessionMessage): ParsedToolCall[] {
   const raw =
+    msg.streamToolCalls ??
     msg.streamMeta?.tool_calls ??
     (msg.meta?.metadata.tool_calls as
       | Array<Record<string, unknown>>

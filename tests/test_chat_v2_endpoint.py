@@ -18,7 +18,7 @@ from api.main import app
 from api.routes import chat_v2 as chat_v2_module
 from chatbot.domain.conversation import Message
 from chatbot.domain.intent import Intent
-from chatbot.domain.retrieval import RetrievalResult
+from chatbot.domain.retrieval import RetrievalResult, ToolCallRecord
 
 
 @pytest.fixture(autouse=True)
@@ -317,6 +317,38 @@ def test_chat_v2_stream_실제_messages_mode_우선(_reset_state) -> None:  # ty
     assert body.count("text-delta") >= 2
     assert '"delta":"A"' in body or '"delta": "A"' in body
     assert '"delta":"B"' in body or '"delta": "B"' in body
+
+
+def test_chat_v2_stream_tool_call_event_emit(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """Agentic 결과의 tool_calls 가 SSE tool-call 이벤트로 노출된다."""
+    fake = _FakeOrchestrator(
+        retrieval=RetrievalResult(
+            documents=(),
+            citations=(),
+            tool_calls=(
+                ToolCallRecord(
+                    tool_name="search_documents",
+                    arguments={"query": "예정론"},
+                    result_preview="",
+                    elapsed_ms=0,
+                ),
+            ),
+            metadata={"answer": "예정론은...", "pattern": "Agentic RAG"},
+        ),
+        intent=Intent.NEW_QUESTION,
+        strategy="agentic",
+    )
+    _install_orchestrator(_reset_state, fake)
+    client = TestClient(app)
+    with client.stream(
+        "POST", "/chat/v2/stream", json={"question": "예정론?", "mode": "auto", "chat_history": []}
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+
+    assert '"type": "tool-call"' in body or '"type":"tool-call"' in body
+    assert '"tool_name": "search_documents"' in body or '"tool_name":"search_documents"' in body
+    assert '"event": "meta"' in body or "event: meta" in body
 
 
 def test_chat_v2_stream_오케스트레이터_예외_error_event(_reset_state) -> None:  # type: ignore[no-untyped-def]

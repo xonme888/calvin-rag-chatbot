@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, Info } from "lucide-react";
 import { chatStream, chatSync, fetchModes, generateAutoTitle } from "@/lib/api";
-import type { Attachment, ChatStreamMeta, Mode, ModeInfo, RagMode } from "@/lib/api";
+import type {
+  Attachment,
+  ChatStreamMeta,
+  Mode,
+  ModeInfo,
+  RagMode,
+  ToolCallWire,
+} from "@/lib/api";
 import { AttachmentInput } from "./AttachmentInput";
 import { messageToBlocks } from "@/lib/blocks";
 import {
@@ -155,6 +162,7 @@ export function ChatPanel({
         // 결정하면 sync replay 로 자연스럽게 처리됨.
         let text = "";
         let receivedMeta: ChatStreamMeta | undefined;
+        let streamToolCalls: ToolCallWire[] = [];
         for await (const chunk of chatStream({
           question,
           mode: startMode,
@@ -167,19 +175,55 @@ export function ChatPanel({
             receivedMeta = chunk.meta;
             continue;
           }
+          if (chunk.type === "tool_call") {
+            streamToolCalls = [...streamToolCalls, chunk.call];
+            next = [
+              ...next.slice(0, -1),
+              {
+                role: "assistant",
+                content: text,
+                streamToolCalls,
+                streaming: true,
+              },
+            ];
+            onUpdateById(startedSessionId, { messages: next });
+            continue;
+          }
           text += chunk.text;
           next = [
             ...next.slice(0, -1),
-            { role: "assistant", content: text, streaming: true },
+            {
+              role: "assistant",
+              content: text,
+              streamToolCalls: streamToolCalls.length > 0 ? streamToolCalls : undefined,
+              streaming: true,
+            },
           ];
           onUpdateById(startedSessionId, { messages: next });
         }
+        const finalMeta = receivedMeta
+          ? {
+              ...receivedMeta,
+              tool_calls:
+                receivedMeta.tool_calls && receivedMeta.tool_calls.length > 0
+                  ? receivedMeta.tool_calls
+                  : streamToolCalls.length > 0
+                    ? streamToolCalls
+                    : receivedMeta.tool_calls,
+              tool_call_count:
+                typeof receivedMeta.tool_call_count === "number"
+                  ? receivedMeta.tool_call_count
+                  : streamToolCalls.length > 0
+                    ? streamToolCalls.length
+                    : receivedMeta.tool_call_count,
+            }
+          : undefined;
         next = [
           ...next.slice(0, -1),
           {
             role: "assistant",
             content: text || "(빈 응답 — 백엔드 SSE 파싱 점검 필요)",
-            streamMeta: receivedMeta,
+            streamMeta: finalMeta,
             streaming: false,
           },
         ];

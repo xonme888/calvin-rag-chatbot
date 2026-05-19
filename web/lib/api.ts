@@ -226,7 +226,8 @@ const DEBUG_SSE = process.env.NODE_ENV !== "production";
 // generator yield 형태 — text-delta 또는 종료 직전 1회 meta
 export type ChatStreamChunk =
   | { type: "delta"; text: string }
-  | { type: "meta"; meta: ChatStreamMeta };
+  | { type: "meta"; meta: ChatStreamMeta }
+  | { type: "tool_call"; call: ToolCallWire };
 
 export async function* chatStream(
   req: ChatRequest,
@@ -321,6 +322,31 @@ export async function* chatStream(
       // event: meta — 종료 직전 1회 emit (cited_pages, source_pages_label 등)
       if (eventType === "meta") {
         yield { type: "meta", meta: obj as ChatStreamMeta };
+        continue;
+      }
+      if (
+        typeof obj === "object" &&
+        obj !== null &&
+        "type" in obj &&
+        (obj as { type?: unknown }).type === "tool-call"
+      ) {
+        const rec = obj as Record<string, unknown>;
+        const toolName =
+          (typeof rec.tool_name === "string" ? rec.tool_name : undefined) ??
+          (typeof rec.tool === "string" ? rec.tool : undefined);
+        if (toolName) {
+          const args =
+            (rec.arguments && typeof rec.arguments === "object"
+              ? (rec.arguments as Record<string, unknown>)
+              : undefined) ??
+            (rec.args && typeof rec.args === "object"
+              ? (rec.args as Record<string, unknown>)
+              : undefined);
+          yield {
+            type: "tool_call",
+            call: { tool_name: toolName, arguments: args },
+          };
+        }
         continue;
       }
       if (

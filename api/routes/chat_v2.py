@@ -377,6 +377,11 @@ async def _stream_events(
         routed_mode=str(response.metadata.get("selected_strategy") or "orchestrator"),
     )
 
+    # Agentic 전략의 도구 호출 이력을 스트림 중 별도 이벤트로 노출.
+    for event in _iter_tool_call_events(response.metadata):
+        yield event
+        await asyncio.sleep(0)
+
     # 실제 token stream이 하나도 없었던 경로(비지원 모델/테스트 더블)는 기존 replay 폴백.
     if not emitted_delta:
         for delta in _token_deltas(response.answer):
@@ -577,3 +582,38 @@ def _token_deltas(answer: str) -> list[str]:
         return [""]
     chunks = re.findall(r"\S+\s*|\n+", answer)
     return chunks if chunks else [answer]
+
+
+def _iter_tool_call_events(metadata: dict[str, Any]) -> list[dict[str, str]]:
+    """metadata.tool_calls 를 SSE message 이벤트(tool-call)로 변환."""
+    raw = metadata.get("tool_calls")
+    if not isinstance(raw, list):
+        return []
+
+    events: list[dict[str, str]] = []
+    for idx, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            continue
+        tool_name = str(item.get("tool_name") or item.get("tool") or "").strip()
+        if not tool_name:
+            continue
+        args_raw = item.get("arguments")
+        if not isinstance(args_raw, dict):
+            args_raw = item.get("args")
+        arguments = args_raw if isinstance(args_raw, dict) else {}
+        payload = {
+            "type": "tool-call",
+            "index": idx,
+            "tool_name": tool_name,
+            "arguments": arguments,
+            # 하위호환: 기존 FE 파서가 tool/args 키를 보더라도 표시 가능.
+            "tool": tool_name,
+            "args": arguments,
+        }
+        events.append(
+            {
+                "event": "message",
+                "data": json.dumps(payload, ensure_ascii=False),
+            }
+        )
+    return events
