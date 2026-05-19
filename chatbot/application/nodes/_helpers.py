@@ -26,6 +26,7 @@ def to_retrieval_request(state: ConversationState) -> RetrievalRequest:
         standalone_question=standalone,
         chat_history=tuple(history),
         attachments=attachments,
+        metadata_filter={"dense_weight": f"{state.requested_dense_weight:.4f}"},
     )
 
 

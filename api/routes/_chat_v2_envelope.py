@@ -43,6 +43,9 @@ def to_state(
     return ConversationState(
         conversation=conversation,
         pending_user_message=user_message,
+        requested_mode=req.mode,
+        previous_mode=req.previous_mode,
+        requested_dense_weight=req.dense_weight,
         trace_id=trace_id,
         started_at_ms=int(time.time() * 1000),
     )
@@ -196,6 +199,16 @@ def _build_metadata(
         {"tool_name": tc.tool_name, "arguments": dict(tc.arguments)} for tc in retrieval.tool_calls
     ]
     metadata["tool_call_count"] = len(retrieval.tool_calls)
+    for key in (
+        "error_code",
+        "strategy_reason",
+        "mode_override",
+        "auto_routed",
+        "routed_mode",
+    ):
+        value = retrieval.metadata.get(key)
+        if value not in (None, ""):
+            metadata[key] = value
     return metadata
 
 

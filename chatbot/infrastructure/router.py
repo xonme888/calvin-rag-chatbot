@@ -20,8 +20,9 @@ _KG_KEYWORDS: frozenset[str] = frozenset(
     {"관계", "영향", "사이", "어떤 인물", "누가", "그래프", "연결", "네트워크", "계보"}
 )
 _AGENTIC_KEYWORDS: frozenset[str] = frozenset(
-    {"최신", "오늘", "최근", "현재", "비교", "차이", "다른", "검색", "찾아", "조회"}
+    {"검색", "찾아", "조회"}
 )
+_RECENCY_KEYWORDS: frozenset[str] = frozenset({"최신", "오늘", "최근", "현재"})
 
 
 class KeywordStrategyRouter:
@@ -39,6 +40,7 @@ class KeywordStrategyRouter:
         candidates: list[RetrievalStrategy],
         standalone_question: str,
         last_turn: Turn | None,
+        previous_mode: str | None = None,
     ) -> RetrievalStrategy | None:
         if not candidates:
             return None
@@ -52,9 +54,22 @@ class KeywordStrategyRouter:
         if "kg" in by_name and _matches_any(standalone_question, _KG_KEYWORDS):
             return by_name["kg"]
 
+        # 최신성 키워드만 있는 질문은 agentic 강제 라우팅하지 않는다.
+        if "hybrid" in by_name and _matches_any(standalone_question, _RECENCY_KEYWORDS):
+            return by_name["hybrid"]
+
         # Agentic 키워드 매칭
         if "agentic" in by_name and _matches_any(standalone_question, _AGENTIC_KEYWORDS):
             return by_name["agentic"]
+
+        # retry 힌트(previous_mode)가 있으면 같은 모드를 우선 피한다.
+        if previous_mode and previous_mode in by_name and len(candidates) > 1:
+            for preferred in ("hybrid", "kg", "agentic", "vision"):
+                if preferred != previous_mode and preferred in by_name:
+                    return by_name[preferred]
+            for cand in candidates:
+                if cand.name != previous_mode:
+                    return cand
 
         # 디폴트: hybrid 우선, 없으면 첫 후보
         return by_name.get("hybrid", candidates[0])

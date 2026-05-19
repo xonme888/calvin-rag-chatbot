@@ -28,6 +28,7 @@ def test_router_vision_후보_1순위():
         candidates=[hybrid, vision],
         standalone_question="이 도판은 무엇인가?",
         last_turn=None,
+        previous_mode=None,
     )
     assert result is vision
 
@@ -40,6 +41,7 @@ def test_router_kg_키워드_매칭():
             candidates=[hybrid, kg],
             standalone_question=f"칼빈과 베자의 {keyword}는?",
             last_turn=None,
+            previous_mode=None,
         )
         assert result is kg, f"keyword={keyword} 가 KG 매칭 안 됨"
 
@@ -47,13 +49,27 @@ def test_router_kg_키워드_매칭():
 def test_router_agentic_키워드_매칭():
     router = KeywordStrategyRouter()
     hybrid, agentic = _S("hybrid"), _S("agentic")
-    for keyword in ["최신", "오늘", "비교", "검색"]:
+    for keyword in ["검색", "조회", "찾아"]:
         result = router.choose(
             candidates=[hybrid, agentic],
             standalone_question=f"{keyword} 정보",
             last_turn=None,
+            previous_mode=None,
         )
         assert result is agentic
+
+
+def test_router_최신키워드_agentic_강제하지_않음():
+    router = KeywordStrategyRouter()
+    hybrid, agentic = _S("hybrid"), _S("agentic")
+    for keyword in ["최신", "오늘", "최근"]:
+        result = router.choose(
+            candidates=[hybrid, agentic],
+            standalone_question=f"{keyword} 칼빈 논의",
+            last_turn=None,
+            previous_mode=None,
+        )
+        assert result is hybrid
 
 
 def test_router_default_hybrid():
@@ -63,13 +79,19 @@ def test_router_default_hybrid():
         candidates=[hybrid, kg],
         standalone_question="예정론은 무엇인가?",
         last_turn=None,
+        previous_mode=None,
     )
     assert result is hybrid
 
 
 def test_router_빈_후보_None():
     assert (
-        KeywordStrategyRouter().choose(candidates=[], standalone_question="?", last_turn=None)
+        KeywordStrategyRouter().choose(
+            candidates=[],
+            standalone_question="?",
+            last_turn=None,
+            previous_mode=None,
+        )
         is None
     )
 
@@ -82,6 +104,7 @@ def test_router_hybrid_없음_첫_후보():
         candidates=[agentic, kg],
         standalone_question="예정론은?",  # 키워드 매칭 없음
         last_turn=None,
+        previous_mode=None,
     )
     assert result is agentic  # 첫 후보
 
@@ -94,5 +117,18 @@ def test_router_vision_kg_같이_있어도_vision_우선():
         candidates=[kg, vision],
         standalone_question="이 도판의 인물 관계는?",
         last_turn=None,
+        previous_mode=None,
     )
     assert result is vision
+
+
+def test_router_retry_hint_previous_mode_회피():
+    router = KeywordStrategyRouter()
+    hybrid, agentic = _S("hybrid"), _S("agentic")
+    result = router.choose(
+        candidates=[hybrid, agentic],
+        standalone_question="예정론은?",
+        last_turn=None,
+        previous_mode="hybrid",
+    )
+    assert result is agentic

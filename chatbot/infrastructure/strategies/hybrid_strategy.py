@@ -77,6 +77,7 @@ class HybridStrategy:
 
     def run(self, request: RetrievalRequest) -> RetrievalResult:
         start = time.perf_counter()
+        self._apply_dense_weight_override(request)
         request = request.model_copy(update={"top_k": self._config.top_k})
 
         documents = self._retrieve.run(request)
@@ -180,3 +181,15 @@ class HybridStrategy:
             answer=answer,
             request=request,
         )
+
+    def _apply_dense_weight_override(self, request: RetrievalRequest) -> None:
+        """request metadata_filter 의 dense_weight를 런타임 가중치로 반영."""
+        raw = request.metadata_filter.get("dense_weight", "").strip()
+        if not raw:
+            return
+        try:
+            value = float(raw)
+        except ValueError:
+            return
+        if 0.0 <= value <= 1.0:
+            self.set_dense_weight(value)
