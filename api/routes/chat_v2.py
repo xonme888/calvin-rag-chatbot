@@ -13,6 +13,7 @@ import asyncio
 import json
 import os
 import re
+import threading
 import time
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
@@ -271,11 +272,55 @@ async def _stream_events(
     client_ip: str = "unknown",
     background: BackgroundTasks | None = None,
 ) -> Any:
-    """orchestrator.invoke 를 ThreadPool 로 감싸 SSE 청크 + meta + done 이벤트 송출."""
+    """orchestrator 실행을 SSE로 송출.
+
+    우선순위:
+    1. LangGraph ``stream_mode=messages`` 지원 시 실제 LLM 델타 스트리밍
+    2. 미지원/테스트 더블이면 기존 sync replay fallback
+    """
     state = to_state(req=req, trace_id=trace_id, store=store, user_id=user_id)
+    orchestrator = _orchestrator()
     start = time.time()
+    result: Any | None = None
+    emitted_delta = False
+    streamed_text = ""
+    stream_guard_blocked = False
+
     try:
-        result = await asyncio.to_thread(_orchestrator().invoke, state)
+        if callable(getattr(orchestrator, "stream", None)):
+            holder: dict[str, Any] = {}
+            async for delta in _iter_graph_message_deltas(
+                orchestrator=orchestrator,
+                state=state,
+                holder=holder,
+            ):
+                if stream_guard_blocked:
+                    continue
+                candidate = streamed_text + delta
+                allow, _reason, sanitized = check_output_guard(candidate)
+                if not allow:
+                    stream_guard_blocked = True
+                    continue
+                next_text = sanitized if sanitized is not None else candidate
+                if not next_text.startswith(streamed_text):
+                    next_text = candidate
+                emit_delta = next_text[len(streamed_text) :]
+                streamed_text = next_text
+                if not emit_delta:
+                    continue
+                emitted_delta = True
+                yield {
+                    "event": "message",
+                    "data": json.dumps(
+                        {"type": "text-delta", "delta": emit_delta},
+                        ensure_ascii=False,
+                    ),
+                }
+            if holder.get("error") is not None:
+                raise holder["error"]
+            result = holder.get("result")
+        else:
+            result = await asyncio.to_thread(orchestrator.invoke, state)
     except Exception:  # noqa: BLE001
         yield {
             "event": "error",
@@ -291,6 +336,24 @@ async def _stream_events(
         }
         yield {"event": "done", "data": "[DONE]"}
         return
+    if result is None:
+        try:
+            result = await asyncio.to_thread(orchestrator.invoke, state)
+        except Exception:  # noqa: BLE001
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {
+                        "error": {
+                            "code": "ORCHESTRATOR_ERROR",
+                            "message": _SAFE_STREAM_ERROR_MESSAGE,
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+            yield {"event": "done", "data": "[DONE]"}
+            return
 
     # SSE 시작 후 — 응답 청크 전에 background save 예약 (latency 영향 0)
     if store is not None and user_id and background is not None:
@@ -314,15 +377,17 @@ async def _stream_events(
         routed_mode=str(response.metadata.get("selected_strategy") or "orchestrator"),
     )
 
-    for delta in _token_deltas(response.answer):
-        yield {
-            "event": "message",
-            "data": json.dumps(
-                {"type": "text-delta", "delta": delta},
-                ensure_ascii=False,
-            ),
-        }
-        await asyncio.sleep(0)
+    # 실제 token stream이 하나도 없었던 경로(비지원 모델/테스트 더블)는 기존 replay 폴백.
+    if not emitted_delta:
+        for delta in _token_deltas(response.answer):
+            yield {
+                "event": "message",
+                "data": json.dumps(
+                    {"type": "text-delta", "delta": delta},
+                    ensure_ascii=False,
+                ),
+            }
+            await asyncio.sleep(0)
 
     meta_payload = {
         **response.metadata,
@@ -335,6 +400,99 @@ async def _stream_events(
         "data": json.dumps(meta_payload, ensure_ascii=False, default=str),
     }
     yield {"event": "done", "data": "[DONE]"}
+
+
+async def _iter_graph_message_deltas(
+    *,
+    orchestrator: Any,
+    state: Any,
+    holder: dict[str, Any],
+) -> Any:
+    """LangGraph stream worker를 백그라운드 스레드로 실행하고 delta를 비동기 전달."""
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+    holder["result"] = None
+    holder["error"] = None
+
+    def _worker() -> None:
+        final_state = None
+        try:
+            for event in orchestrator.stream(
+                state,
+                stream_mode=["messages", "values"],
+            ):
+                mode, payload = _split_stream_event(event)
+                if mode == "values":
+                    final_state = payload
+                    continue
+                if mode != "messages":
+                    continue
+                token, metadata = _split_message_payload(payload)
+                if not _is_user_visible_node(metadata):
+                    continue
+                text = _chunk_to_text(token)
+                if text:
+                    loop.call_soon_threadsafe(queue.put_nowait, ("delta", text))
+        except Exception as exc:  # noqa: BLE001
+            holder["error"] = exc
+        finally:
+            holder["result"] = final_state
+            loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+    while True:
+        kind, payload = await queue.get()
+        if kind == "done":
+            break
+        if kind == "delta":
+            yield str(payload)
+
+
+def _split_stream_event(event: Any) -> tuple[str, Any]:
+    """stream_mode 다중 설정 시 (mode, payload) 튜플을 표준화."""
+    if isinstance(event, tuple) and len(event) == 2 and isinstance(event[0], str):
+        return event[0], event[1]
+    return "values", event
+
+
+def _split_message_payload(payload: Any) -> tuple[Any, dict[str, Any]]:
+    """messages payload (token, metadata) 표준화."""
+    if isinstance(payload, tuple) and len(payload) == 2:
+        token, metadata = payload
+        if isinstance(metadata, dict):
+            return token, metadata
+        return token, {}
+    return payload, {}
+
+
+def _is_user_visible_node(metadata: dict[str, Any]) -> bool:
+    """내부 분류/재작성 노드는 제외하고 사용자 답변 경로만 스트림."""
+    node = str(metadata.get("langgraph_node") or "")
+    if not node:
+        return True
+    return node in {"invoke", "compose"}
+
+
+def _chunk_to_text(chunk: Any) -> str:
+    """LLM 메시지 청크에서 사용자 표시용 텍스트만 추출."""
+    if chunk is None:
+        return ""
+    content = getattr(chunk, "content", chunk)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return str(content)
 
 
 def _client_ip(request: Request) -> str:

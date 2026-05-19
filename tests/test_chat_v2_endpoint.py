@@ -75,6 +75,20 @@ class _FakeOrchestrator:
         )
 
 
+class _FakeStreamingOrchestrator(_FakeOrchestrator):
+    """LangGraph stream(messages+values) 형태를 흉내내는 테스트 더블."""
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    def stream(self, state, stream_mode=None, **kwargs):  # type: ignore[no-untyped-def]
+        del stream_mode, kwargs
+        yield ("messages", (self._Chunk("A"), {"langgraph_node": "invoke"}))
+        yield ("messages", (self._Chunk("B"), {"langgraph_node": "invoke"}))
+        yield ("values", self.invoke(state))
+
+
 def _install_orchestrator(monkeypatch, orchestrator) -> None:  # type: ignore[no-untyped-def]
     """monkeypatch 로 _orchestrator 함수를 갈아끼움 — fixture teardown 시 자동 복원."""
 
@@ -278,6 +292,31 @@ def test_chat_v2_stream_chunks_meta(_reset_state) -> None:  # type: ignore[no-un
     assert "new_question" in body  # intent
     # done 종료
     assert "[DONE]" in body
+
+
+def test_chat_v2_stream_실제_messages_mode_우선(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """stream(messages) 델타가 있으면 sync replay 대신 해당 델타를 사용."""
+    fake = _FakeStreamingOrchestrator(
+        retrieval=RetrievalResult(
+            documents=(),
+            citations=(),
+            metadata={"answer": "AB", "pattern": "Hybrid RAG"},
+        ),
+        intent=Intent.NEW_QUESTION,
+        strategy="hybrid",
+    )
+    _install_orchestrator(_reset_state, fake)
+    client = TestClient(app)
+    with client.stream(
+        "POST", "/chat/v2/stream", json={"question": "예정론?", "mode": "auto", "chat_history": []}
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+
+    # messages 모드에서 A/B 두 델타 emit
+    assert body.count("text-delta") >= 2
+    assert '"delta":"A"' in body or '"delta": "A"' in body
+    assert '"delta":"B"' in body or '"delta": "B"' in body
 
 
 def test_chat_v2_stream_오케스트레이터_예외_error_event(_reset_state) -> None:  # type: ignore[no-untyped-def]
