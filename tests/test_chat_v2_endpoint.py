@@ -107,6 +107,8 @@ def test_chat_v2_new_question_정상(_reset_state) -> None:  # type: ignore[no-u
     assert body["answer"] == "예정론은..."
     assert body["metadata"]["intent"] == "new_question"
     assert body["metadata"]["selected_strategy"] == "hybrid"
+    assert body["metadata"]["routed_mode"] == "hybrid"
+    assert body["metadata"]["auto_routed"] is True
     assert body["metadata"]["pattern"] == "Hybrid RAG"
     assert "trace_id" in body["metadata"]
     # envelope 호환성 — 기존 /chat/sync 가 노출하던 키들
