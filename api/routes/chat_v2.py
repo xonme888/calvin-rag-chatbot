@@ -387,7 +387,7 @@ def _record_usage_and_budget(
     routed_mode: str,
 ) -> None:
     """요청 단위 사용량 통계/예산 누적."""
-    model_name = str(getattr(get_hybrid_rag().llm, "model_name", "gpt-4o-mini") or "gpt-4o-mini")
+    model_name = _resolve_usage_model_name()
     tracker = build_usage_tracker(mode=routed_mode, model=model_name)
     tokens_in, tokens_out = tracker.record_text_interaction(
         input_text=question,
@@ -400,6 +400,14 @@ def _record_usage_and_budget(
         tokens_out=tokens_out,
         model=model_name,
     )
+
+
+def _resolve_usage_model_name() -> str:
+    """Usage 추정용 모델명.
+
+    요청 경로에서 RAG lazy build를 트리거하지 않기 위해 환경변수 기반으로만 결정한다.
+    """
+    return os.getenv("OPENAI_MODEL", "").strip() or "gpt-4o-mini"
 
 
 def _token_deltas(answer: str) -> list[str]:
