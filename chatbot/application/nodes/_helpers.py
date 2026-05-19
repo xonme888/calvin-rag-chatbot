@@ -6,9 +6,14 @@
 
 from __future__ import annotations
 
+import os
+
 from chatbot.domain.conversation import Attachment, Message
 from chatbot.domain.retrieval import RetrievalRequest
 from chatbot.domain.state import ConversationState
+
+_MAX_HISTORY_MESSAGES = max(2, int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "12")))
+_MAX_HISTORY_CHARS = max(500, int(os.getenv("CHAT_HISTORY_MAX_CHARS", "4000")))
 
 
 def to_retrieval_request(state: ConversationState) -> RetrievalRequest:
@@ -22,6 +27,7 @@ def to_retrieval_request(state: ConversationState) -> RetrievalRequest:
     for turn in state.conversation.turns:
         history.append(turn.user_message)
         history.append(turn.answer)
+    history = _bounded_history(history)
     return RetrievalRequest(
         standalone_question=standalone,
         chat_history=tuple(history),
@@ -35,4 +41,35 @@ def history_messages(state: ConversationState) -> tuple[Message, ...]:
     for turn in state.conversation.turns:
         out.append(turn.user_message)
         out.append(turn.answer)
-    return tuple(out)
+    return tuple(_bounded_history(out))
+
+
+def _bounded_history(messages: list[Message]) -> list[Message]:
+    """대화 히스토리 상한 적용 + 초과분 요약 압축."""
+    if not messages:
+        return []
+
+    # 최근 메시지 우선으로 길이·개수 제한을 동시에 만족시킨다.
+    picked: list[Message] = []
+    chars = 0
+    for msg in reversed(messages):
+        next_chars = chars + len(msg.content)
+        if len(picked) >= _MAX_HISTORY_MESSAGES or next_chars > _MAX_HISTORY_CHARS:
+            break
+        picked.append(msg)
+        chars = next_chars
+
+    kept = list(reversed(picked))
+    dropped_count = len(messages) - len(kept)
+    if dropped_count <= 0:
+        return kept
+
+    # 초과된 앞부분은 간단 요약 메시지로 압축해 컨텍스트 단절을 완화한다.
+    dropped_preview = " / ".join(
+        f"{'U' if m.role == 'user' else 'A'}:{m.content[:40]}" for m in messages[: min(3, dropped_count)]
+    )
+    summary = Message(
+        role="assistant",
+        content=f"[이전 대화 요약: {dropped_count}개 메시지 생략] {dropped_preview}",
+    )
+    return [summary, *kept]

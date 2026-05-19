@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, TypedDict
 
 from chatbot.domain.conversation import Message
@@ -62,7 +63,8 @@ class GenerateStage:
         from rag_core.hybrid import RAGResponse
 
         context = "\n\n---\n\n".join(format_doc_with_meta(d) for d in input["documents"])
-        chat_history_lc = _to_langchain_messages(input["chat_history"])
+        clipped_history = _clip_history_for_generate(input["chat_history"])
+        chat_history_lc = _to_langchain_messages(clipped_history)
 
         structured_llm = self._llm.with_structured_output(RAGResponse)
         chain = self._prompt | structured_llm
@@ -89,3 +91,20 @@ def _to_langchain_messages(history: list[Message]):  # type: ignore[no-untyped-d
         else:
             out.append(AIMessage(content=m.content))
     return out
+
+
+def _clip_history_for_generate(history: list[Message]) -> list[Message]:
+    """generate 단계 전용 히스토리 상한. prompt 길이 폭주를 방지."""
+    if not history:
+        return []
+    out: list[Message] = []
+    chars = 0
+    for msg in reversed(history):
+        next_chars = chars + len(msg.content)
+        if len(out) >= _MAX_GENERATE_HISTORY_MESSAGES or next_chars > _MAX_GENERATE_HISTORY_CHARS:
+            break
+        out.append(msg)
+        chars = next_chars
+    return list(reversed(out))
+_MAX_GENERATE_HISTORY_MESSAGES = max(2, int(os.getenv("CHAT_GENERATE_HISTORY_MAX_MESSAGES", "10")))
+_MAX_GENERATE_HISTORY_CHARS = max(500, int(os.getenv("CHAT_GENERATE_HISTORY_MAX_CHARS", "3000")))

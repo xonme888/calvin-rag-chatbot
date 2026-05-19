@@ -292,6 +292,13 @@ export async function* chatStream(
 
       try {
         const obj = JSON.parse(payload);
+        if (eventType === "error") {
+          const msg =
+            (obj?.error?.message as string | undefined) ??
+            (obj?.error as string | undefined) ??
+            "스트리밍 오류가 발생했습니다.";
+          throw new Error(msg);
+        }
         // event: meta — 종료 직전 1회 emit (cited_pages, source_pages_label 등)
         if (eventType === "meta") {
           yield { type: "meta", meta: obj as ChatStreamMeta };
