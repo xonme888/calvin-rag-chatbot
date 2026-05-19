@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from api.dependencies import reset_dependency_cache
@@ -292,8 +293,52 @@ def test_chat_v2_stream_오케스트레이터_예외_error_event(_reset_state) -
         assert resp.status_code == 200
         body = resp.read().decode("utf-8")
     assert "error" in body
-    assert "RuntimeError" in body
+    assert "ORCHESTRATOR_ERROR" in body
+    assert "RuntimeError" not in body
     assert "[DONE]" in body
+
+
+def test_chat_v2_output_guard_blocked_message(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """출력 가드 차단 시 안전 메시지로 치환."""
+    fake = _FakeOrchestrator(
+        retrieval=RetrievalResult(
+            documents=(),
+            citations=(),
+            metadata={"answer": "blocked answer", "pattern": "Hybrid RAG"},
+        ),
+        intent=Intent.NEW_QUESTION,
+        strategy="hybrid",
+    )
+    _install_orchestrator(_reset_state, fake)
+    _reset_state.setattr(chat_v2_module, "check_output_guard", lambda _text: (False, "policy", None))
+    client = TestClient(app)
+    resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"] == "안전 정책으로 인해 응답을 제공할 수 없습니다."
+    assert body["metadata"]["guard_action"] == "output_blocked"
+
+
+def test_chat_v2_input_guard_block_returns_400(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """입력 가드 차단 시 400."""
+    _reset_state.setattr(chat_v2_module, "check_input_guard", lambda _text: (False, "blocked", None))
+    client = TestClient(app)
+    resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "blocked"
+
+
+def test_chat_v2_user_budget_exceeded_returns_429(_reset_state) -> None:  # type: ignore[no-untyped-def]
+    """사용자 budget 초과 시 429."""
+    _reset_state.setattr(
+        chat_v2_module,
+        "check_user_budget",
+        lambda **_kw: (_ for _ in ()).throw(HTTPException(status_code=429, detail="budget exceeded")),
+    )
+    client = TestClient(app)
+    resp = client.post("/chat/v2", json={"question": "Q", "mode": "auto", "chat_history": []})
+    assert resp.status_code == 429
+    assert resp.json()["detail"] == "budget exceeded"
 
 
 def test_chat_v2_stream_라우트_등록() -> None:

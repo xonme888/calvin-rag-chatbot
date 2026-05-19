@@ -11,7 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from infra.usage_tracker import SessionStats
+from infra.usage_tracker import SessionStats, UsageTracker
 from rag_core.agentic import AgenticRAG
 from rag_core.calvin_builder import build_calvin_rag
 from rag_core.guardrail import (
@@ -90,6 +90,11 @@ def get_session_stats() -> SessionStats:
     운영 환경에선 다중 워커이면 외부 스토어(Redis 등)로 이전 필요 (Phase 3).
     """
     return SessionStats()
+
+
+def build_usage_tracker(*, mode: str = "Orchestrator", model: str = "gpt-4o-mini") -> UsageTracker:
+    """요청 단위 UsageTracker 생성."""
+    return UsageTracker(stats=get_session_stats(), mode=mode, model=model)
 
 
 # ====================================================================
