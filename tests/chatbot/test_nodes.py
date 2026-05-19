@@ -77,8 +77,10 @@ class _FakeRouter:
         self.choice_idx = choice_idx
         self.calls: list = []
 
-    def choose(self, *, candidates, standalone_question, last_turn):  # type: ignore[no-untyped-def]
-        self.calls.append((candidates, standalone_question, last_turn))
+    def choose(  # type: ignore[no-untyped-def]
+        self, *, candidates, standalone_question, last_turn, previous_mode=None
+    ):
+        self.calls.append((candidates, standalone_question, last_turn, previous_mode))
         if self.choice_idx is None:
             return None
         return candidates[self.choice_idx]
@@ -186,6 +188,8 @@ def test_select_후보_0개_None():
     state = _state().model_copy(update={"pending_intent": Intent.NEW_QUESTION})
     out = select_strategy(state, registry=reg, router=router)
     assert out.pending_strategy is None
+    assert out.pending_retrieval is not None
+    assert out.pending_retrieval.metadata["error_code"] == "NO_STRATEGY_AVAILABLE"
     assert router.calls == []  # 호출되지 않음
 
 
@@ -196,6 +200,33 @@ def test_select_router_None_반환():
     state = _state().model_copy(update={"pending_intent": Intent.NEW_QUESTION})
     out = select_strategy(state, registry=reg, router=router)
     assert out.pending_strategy is None
+    assert out.pending_retrieval is not None
+    assert out.pending_retrieval.metadata["error_code"] == "NO_STRATEGY_AVAILABLE"
+
+
+def test_select_mode_override_요청모드_우선():
+    reg = InMemoryStrategyRegistry()
+    reg.register(_FakeStrategy("hybrid"))
+    reg.register(_FakeStrategy("kg"))
+    router = _FakeRouter(choice_idx=0)  # 라우터가 hybrid를 골라도
+    state = _state(message="질문").model_copy(
+        update={"pending_intent": Intent.NEW_QUESTION, "requested_mode": "kg"}
+    )
+    out = select_strategy(state, registry=reg, router=router)
+    assert out.pending_strategy == "kg"
+
+
+def test_select_mode_override_요청모드_불가():
+    reg = InMemoryStrategyRegistry()
+    reg.register(_FakeStrategy("hybrid"))
+    router = _FakeRouter(choice_idx=0)
+    state = _state(message="질문").model_copy(
+        update={"pending_intent": Intent.NEW_QUESTION, "requested_mode": "agentic"}
+    )
+    out = select_strategy(state, registry=reg, router=router)
+    assert out.pending_strategy is None
+    assert out.pending_retrieval is not None
+    assert out.pending_retrieval.metadata["error_code"] == "NO_STRATEGY_AVAILABLE"
 
 
 # ============================================================
@@ -235,6 +266,7 @@ def test_invoke_chat_history_전달():
     )
     invoke_strategy(state, registry=reg)
     assert len(fake.runs[0].chat_history) == 2  # user + assistant 1세트
+    assert fake.runs[0].metadata_filter["dense_weight"] == "0.5000"
 
 
 # ============================================================

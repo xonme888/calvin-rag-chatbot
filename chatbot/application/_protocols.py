@@ -68,6 +68,7 @@ class StrategyRouter(Protocol):
         candidates: list[RetrievalStrategy],
         standalone_question: str,
         last_turn: Turn | None,
+        previous_mode: str | None = None,
     ) -> RetrievalStrategy | None: ...
 
 

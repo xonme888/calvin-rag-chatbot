@@ -47,6 +47,11 @@ class ConversationState(BaseModel):
     pending_retrieval: RetrievalResult | None = None
     pending_answer: Message | None = None
 
+    requested_mode: str = "auto"
+    previous_mode: str | None = None
+    requested_dense_weight: float = 0.5
+    """요청 라우팅 힌트. select/invoke 노드가 전략 선택·가중치 조정에 사용."""
+
     trace_id: str
     started_at_ms: int = Field(ge=0)
     """epoch ms — 턴 elapsed 계산용. compose_answer 노드가 사용."""
